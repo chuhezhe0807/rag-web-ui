@@ -8,4 +8,13 @@ module.exports = {
     skipMiddlewareUrlNormalize: true,
     skipTrailingSlashRedirect: true,
   },
+  rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: `http://localhost:8000/api/:path*`,
+        basePath: false
+      },
+    ];
+  },
 };
