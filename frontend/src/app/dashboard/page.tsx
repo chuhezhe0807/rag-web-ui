@@ -39,8 +39,8 @@ export default function DashboardPage() {
     const fetchStats = async () => {
       try {
         const [kbData, chatData] = await Promise.all([
-          api.get("/api/knowledge-base"),
-          api.get("/api/chat"),
+          api.get("/knowledge-base"),
+          api.get("/chat"),
         ]);
 
         setStats({

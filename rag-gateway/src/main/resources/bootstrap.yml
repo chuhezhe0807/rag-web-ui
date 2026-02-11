@@ -1,0 +1,34 @@
+spring:
+  application:
+    name: rag-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: false # 关闭自动生成服务路由
+
+    nacos:
+      username: nacos
+      password: nacos
+      discovery:
+        namespace: public
+        group: DEFAULT_GROUP
+        server-addr: 127.0.0.1:8848
+      config:
+        namespace: public
+        group: DEFAULT_GROUP
+        file-extension: yaml
+        server-addr: 127.0.0.1:8848
+        time-out: 5000
+        extension-configs:
+          - data-id: ${spring.application.name}.yaml
+            group: DEFAULT_GROUP
+            refresh: false
+
+logging:
+  level:
+    # 打印 Gateway 路由匹配日志
+    org.springframework.cloud.gateway: DEBUG
+    # 打印服务发现日志
+    com.alibaba.cloud.nacos: DEBUG

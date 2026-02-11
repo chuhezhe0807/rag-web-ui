@@ -3,6 +3,8 @@ interface FetchOptions extends Omit<RequestInit, 'body' | 'headers'> {
   headers?: Record<string, string>;
 }
 
+export const BASE_URL = "api/ai"
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -10,7 +12,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
+export async function fetchApi(url: string, options: FetchOptions = {}) {
   const { data, headers: customHeaders = {}, ...restOptions } = options;
 
   // Get token from localStorage
@@ -48,9 +50,10 @@ export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
   }
 
   try {
-    const response = await fetch(fullUrl, config);
+    const response = await fetch(`${BASE_URL}${url}`, config);
+    const data = await response.json();
 
-    if (response.status === 401) {
+    if (response.status === 401 || data.code === 401) {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('token');
         window.location.href = '/login';
@@ -58,15 +61,14 @@ export async function fetchApi(fullUrl: string, options: FetchOptions = {}) {
       throw new ApiError(401, 'Unauthorized - Please log in again');
     }
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+    if (!response.ok || data.code !== 200) {
       throw new ApiError(
         response.status,
-        errorData.message || errorData.detail || 'An error occurred'
+        data.message || data.detail || 'An error occurred'
       );
     }
 
-    return await response.json();
+    return data;
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;

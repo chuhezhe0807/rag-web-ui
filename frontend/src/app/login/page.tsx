@@ -29,13 +29,13 @@ export default function LoginPage() {
       formUrlEncoded.append("username", username as string);
       formUrlEncoded.append("password", password as string);
 
-      const data = await api.post("/api/auth/token", formUrlEncoded, {
+      const res = await api.post("/auth/token", formUrlEncoded, {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
       });
 
-      localStorage.setItem("token", data.access_token);
+      localStorage.setItem("token", res.data.accessToken);
       router.push("/dashboard");
     } catch (err) {
       if (err instanceof ApiError) {

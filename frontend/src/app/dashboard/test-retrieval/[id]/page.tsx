@@ -35,7 +35,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchKnowledgeBase = async () => {
       try {
-        const data = await api.get(`/api/knowledge-base/${params.id}`);
+        const data = await api.get(`/knowledge-base/${params.id}`);
         setKnowledgeBase(data);
       } catch (error) {
         console.error("Failed to fetch knowledge base:", error);
@@ -64,7 +64,7 @@ export default function TestPage({ params }: { params: { id: string } }) {
 
     setLoading(true);
     try {
-      const data = await api.post("/api/knowledge-base/test-retrieval", {
+      const data = await api.post("/knowledge-base/test-retrieval", {
         query,
         kb_id: parseInt(params.id),
         top_k: parseInt(topK),

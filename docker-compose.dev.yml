@@ -93,7 +93,8 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - ./.dockervolumes/mysql/data:/var/lib/mysql
+      - ./.dockervolumes/mysql/sql:/docker-entrypoint-initdb.d/
     networks:
       - app_network
 
@@ -102,7 +103,7 @@ services:
     ports:
       - "8001:8000"
     volumes:
-      - chroma_data:/chroma/chroma
+      - ./.chromadb/mysql/data:/chroma/chroma
     networks:
       - app_network
 
@@ -115,15 +116,10 @@ services:
       - MINIO_ROOT_USER=minioadmin
       - MINIO_ROOT_PASSWORD=minioadmin
     volumes:
-      - minio_data:/data
+      - ./.dockervolumes/minio/data:/data
     command: server --console-address ":9001" /data
     networks:
       - app_network
-
-volumes:
-  mysql_data:
-  chroma_data:
-  minio_data:
 
 networks:
   app_network:

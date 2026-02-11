@@ -66,8 +66,8 @@ export const Answer: FC<{
 
         try {
           const [kb, doc] = await Promise.all([
-            api.get(`/api/knowledge-base/${kb_id}`),
-            api.get(`/api/knowledge-base/${kb_id}/documents/${document_id}`),
+            api.get(`/knowledge-base/${kb_id}`),
+            api.get(`/knowledge-base/${kb_id}/documents/${document_id}`),
           ]);
 
           infoMap[key] = {

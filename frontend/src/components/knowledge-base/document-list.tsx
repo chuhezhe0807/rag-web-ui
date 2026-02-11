@@ -48,7 +48,7 @@ export function DocumentList({ knowledgeBaseId }: DocumentListProps) {
   useEffect(() => {
     const fetchDocuments = async () => {
       try {
-        const data = await api.get(`/api/knowledge-base/${knowledgeBaseId}`);
+        const data = await api.get(`/knowledge-base/${knowledgeBaseId}`);
         setDocuments(data.documents);
       } catch (error) {
         if (error instanceof ApiError) {
