@@ -3,7 +3,11 @@ interface FetchOptions extends Omit<RequestInit, 'body' | 'headers'> {
   headers?: Record<string, string>;
 }
 
-export const BASE_URL = "api/ai"
+/**
+ * 带/的路径是根相对路径，基于当前域名 / 端口的根目录拼接，不受页面路径层级影响；
+ * 不带/的路径是页面相对路径，基于当前页面的 URL 路径拼接，易受页面层级影响导致请求错误；
+ */
+export const BASE_URL = "/api/ai"
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
