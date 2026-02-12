@@ -65,7 +65,8 @@ export async function fetchApi(url: string, options: FetchOptions = {}) {
       throw new ApiError(401, 'Unauthorized - Please log in again');
     }
 
-    if (!response.ok || data.code !== 200) {
+    // 兼容java服务器的返回（java服务返回的是 {code: xxx, codeDesc: xxx, message: xxx, data: xxx}）
+    if (!response.ok || (data.code != null && data.code !== 200)) {
       throw new ApiError(
         response.status,
         data.message || data.detail || 'An error occurred'
