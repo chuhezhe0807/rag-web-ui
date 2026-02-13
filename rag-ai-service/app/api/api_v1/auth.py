@@ -29,7 +29,7 @@ def get_current_user(
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("sub")
+        username: str = payload.get("username")
         if username is None:
             raise credentials_exception
     except JWTError:
@@ -109,7 +109,7 @@ def login_access_token(
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = security.create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+        data={"username": user.username}, expires_delta=access_token_expires
     )
     return ApiResponse(
         code=status.HTTP_200_OK,
@@ -124,3 +124,12 @@ def test_token(current_user: User = Depends(get_current_user)) -> Any:
     Test access token by getting current user.
     """
     return current_user
+
+
+if __name__ == "__main__":
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = security.create_access_token(
+        data={"username": "chu"}, expires_delta=access_token_expires
+    )
+    print(access_token_expires)
+    print(access_token)

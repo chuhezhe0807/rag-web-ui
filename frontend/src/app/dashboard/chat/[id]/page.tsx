@@ -57,7 +57,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     isLoading,
     setMessages,
   } = useChat({
-    api: `/chat/${params.id}/messages`,
+    api: `/api/ai/chat/${params.id}/messages`,
     headers: {
       Authorization: `Bearer ${
         typeof window !== "undefined"

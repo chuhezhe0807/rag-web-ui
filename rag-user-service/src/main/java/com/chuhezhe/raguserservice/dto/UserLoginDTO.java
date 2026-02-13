@@ -1,11 +1,11 @@
-package com.chuhezhe.raguserservice.vo.request;
+package com.chuhezhe.raguserservice.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
 @Data
 @AllArgsConstructor
-public class LoginRequest {
+public class UserLoginDTO {
     private String username;
 
     private String password;

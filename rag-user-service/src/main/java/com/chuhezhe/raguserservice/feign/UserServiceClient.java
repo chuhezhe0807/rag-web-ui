@@ -1,10 +1,10 @@
 package com.chuhezhe.raguserservice.feign;
 
 import com.chuhezhe.common.entity.Result;
-import com.chuhezhe.raguserservice.vo.request.LoginRequest;
-import com.chuhezhe.raguserservice.vo.request.RegisterRequest;
-import com.chuhezhe.raguserservice.vo.response.LoginResponse;
-import com.chuhezhe.raguserservice.vo.response.RegisterResponse;
+import com.chuhezhe.raguserservice.dto.UserLoginDTO;
+import com.chuhezhe.raguserservice.dto.UserRegisterDTO;
+import com.chuhezhe.raguserservice.vo.UserLoginVo;
+import com.chuhezhe.raguserservice.vo.UserRegisterVO;
 import feign.Headers;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
@@ -24,11 +24,11 @@ public interface UserServiceClient {
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE
     )
     @Headers("Content-Type: application/x-www-form-urlencoded") // 当前方法作为 Feign 客户端发送请求时，要携带的请求头
-    Result<LoginResponse> login(@RequestBody LoginRequest password);
+    Result<UserLoginVo> login(@RequestBody UserLoginDTO userLoginDTO);
 
     /**
      * 注册
      */
     @PostMapping("/api/ai/auth/register")
-    Result<RegisterResponse> register(@RequestBody RegisterRequest registerRequest);
+    Result<UserRegisterVO> register(@RequestBody UserRegisterDTO registerRequest);
 }

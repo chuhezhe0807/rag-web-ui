@@ -1,10 +1,9 @@
-package com.chuhezhe.raguserservice.vo.request;
+package com.chuhezhe.raguserservice.dto;
 
 import lombok.Data;
 
 @Data
-public class RegisterRequest {
-
+public class UserRegisterDTO {
     private String username;
 
     private String password;

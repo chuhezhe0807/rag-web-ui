@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     NACOS_NAMESPACE: str = os.getenv("NACOS_NAMESPACE", "")
 
     class Config:
-        env_file = ".env"
+        env_file = "../.env" # 目录结构改变后，配置文件访问路径需要修改
 
 
 settings = Settings()

@@ -1,6 +1,7 @@
 package com.chuhezhe.common.entity;
 
 import com.chuhezhe.common.constants.ErrorConstants;
+import com.chuhezhe.common.util.MessageUtil;
 import lombok.Data;
 import org.springframework.http.HttpStatus;
 
@@ -18,7 +19,7 @@ public class Result<T> {
         Result<T> result = new Result<>();
         result.setCode(HttpStatus.OK.value());
         result.setCodeDesc(HttpStatus.OK.getReasonPhrase());
-        result.setMessage("成功");
+        result.setMessage(MessageUtil.getMessage("common.success"));
         result.setData(data);
         return result;
     }
@@ -27,8 +28,16 @@ public class Result<T> {
         Result<T> result = new Result<>();
         result.setCode(HttpStatus.OK.value());
         result.setCodeDesc(HttpStatus.OK.getReasonPhrase());
-        result.setMessage("成功");
+        result.setMessage(MessageUtil.getMessage("common.success"));
         result.setData(null);
+        return result;
+    }
+
+    public static <T> Result<T> error(ErrorConstants errorConstants) {
+        Result<T> result = new Result<>();
+        result.setCode(errorConstants.getHttpStatus().value());
+        result.setCodeDesc(errorConstants.getCode());
+        result.setMessage(MessageUtil.getMessage("error." + errorConstants.getCode()));
         return result;
     }
 

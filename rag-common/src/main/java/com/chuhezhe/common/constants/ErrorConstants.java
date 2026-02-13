@@ -20,6 +20,11 @@ public enum ErrorConstants {
      * 状态码 400
      */
     REQUEST_TIMEOUT(HttpStatus.BAD_REQUEST, "RequestTimeout"),
+    PARAMETER_ERROR(HttpStatus.BAD_REQUEST, "ParameterError"),
+    MISSING_REQUEST_HEADER(HttpStatus.BAD_REQUEST, "MissingRequestHeader"),
+    USERNAME_ALREADY_EXIST(HttpStatus.BAD_REQUEST, "UsernameAlreadyExist"),
+    EMAIL_ALREADY_EXIST(HttpStatus.BAD_REQUEST, "EmailAlreadyExist"),
+
     /**
      * 状态码 401
      */

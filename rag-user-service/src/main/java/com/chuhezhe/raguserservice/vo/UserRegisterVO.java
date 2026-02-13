@@ -1,14 +1,15 @@
-package com.chuhezhe.raguserservice.vo.response;
+package com.chuhezhe.raguserservice.vo;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class RegisterResponse {
+public class UserRegisterVO {
     private String email;
 
     private String username;

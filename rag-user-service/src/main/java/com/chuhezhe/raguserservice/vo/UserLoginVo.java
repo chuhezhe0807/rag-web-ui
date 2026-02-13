@@ -1,4 +1,4 @@
-package com.chuhezhe.raguserservice.vo.response;
+package com.chuhezhe.raguserservice.vo;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.AllArgsConstructor;
@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class LoginResponse {
+public class UserLoginVo {
 
     @JsonAlias("access_token")
     private String accessToken;
