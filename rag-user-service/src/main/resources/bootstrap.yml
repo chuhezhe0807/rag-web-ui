@@ -19,7 +19,7 @@ spring:
         extension-configs:
           - data-id: ${spring.application.name}.yaml
             group: DEFAULT_GROUP
-            refresh: false
+            refresh: false # 配置文件是否动态刷新，对于一些配置文件，有可能会有缓存此时需要使用@RefreshScope注解 一般动态刷新的都是 @Value注解的配置
 
 logging:
   level:
