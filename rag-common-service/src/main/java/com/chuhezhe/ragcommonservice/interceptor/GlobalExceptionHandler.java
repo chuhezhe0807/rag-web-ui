@@ -11,6 +11,7 @@ import feign.FeignException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -114,8 +115,9 @@ public class GlobalExceptionHandler {
         response.setStatus(400);
         response.setContentType("application/json;charset=UTF-8");
 
-        String errorMessage = ex.getConstraintViolations().stream()
-                .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
+        String errorMessage = ex.getConstraintViolations()
+                .stream()
+                .map(ConstraintViolation::getMessage)
                 .collect(Collectors.joining(", "));
 
         Result<Object> error = Result.error(ErrorConstants.PARAMETER_ERROR, errorMessage);
