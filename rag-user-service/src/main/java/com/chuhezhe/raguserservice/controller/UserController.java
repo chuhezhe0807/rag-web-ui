@@ -1,11 +1,13 @@
 package com.chuhezhe.raguserservice.controller;
 
+import com.chuhezhe.common.constants.GConstants;
 import com.chuhezhe.common.entity.Result;
 import com.chuhezhe.raguserservice.dto.UserLoginDTO;
 import com.chuhezhe.raguserservice.dto.UserRegisterDTO;
 import com.chuhezhe.raguserservice.service.IUserService;
-import com.chuhezhe.raguserservice.vo.UserLoginVo;
+import com.chuhezhe.raguserservice.vo.UserLoginVO;
 import com.chuhezhe.raguserservice.vo.UserRegisterVO;
+import com.chuhezhe.raguserservice.vo.UserVO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -24,7 +26,7 @@ public class UserController {
     public final IUserService userService;
 
     @PostMapping(value = "/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-    public Result<UserLoginVo> login(
+    public Result<UserLoginVO> login(
             @RequestParam("username")
             @NotBlank(message = "{validation.adminUser.username.notNull}")
             @Size(min = 3, max = 50, message = "{validation.adminUser.username.size}")
@@ -45,5 +47,10 @@ public class UserController {
     @PostMapping("/register")
     public Result<UserRegisterVO> register(@Valid @RequestBody UserRegisterDTO registerRequest) {
         return userService.register(registerRequest);
+    }
+
+    @GetMapping("/info")
+    public Result<UserVO> getUserInfo(@RequestHeader(GConstants.JWT_TOKEN_HEADER) String token) {
+        return userService.getUserInfo(token);
     }
 }

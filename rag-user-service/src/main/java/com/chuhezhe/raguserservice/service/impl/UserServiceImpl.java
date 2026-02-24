@@ -2,6 +2,7 @@ package com.chuhezhe.raguserservice.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.chuhezhe.common.constants.ErrorConstants;
+import com.chuhezhe.common.constants.GConstants;
 import com.chuhezhe.common.entity.Result;
 import com.chuhezhe.common.util.BcryptUtil;
 import com.chuhezhe.common.util.JWTUtil;
@@ -10,8 +11,10 @@ import com.chuhezhe.raguserservice.dto.UserRegisterDTO;
 import com.chuhezhe.raguserservice.entity.User;
 import com.chuhezhe.raguserservice.mapper.user.UserMapper;
 import com.chuhezhe.raguserservice.service.IUserService;
-import com.chuhezhe.raguserservice.vo.UserLoginVo;
+import com.chuhezhe.raguserservice.vo.UserLoginVO;
 import com.chuhezhe.raguserservice.vo.UserRegisterVO;
+import com.chuhezhe.raguserservice.vo.UserVO;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -26,7 +29,7 @@ import java.util.Map;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
     @Override
-    public Result<UserLoginVo> login(UserLoginDTO userLoginDTO) {
+    public Result<UserLoginVO> login(UserLoginDTO userLoginDTO) {
         // 1. 查询用户是否存在
         User user = baseMapper.getUserByUsername(userLoginDTO.getUsername());
 
@@ -41,8 +44,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         }
 
         // 4. 生成token并返回
-        UserLoginVo userLoginVo = new UserLoginVo();
-        userLoginVo.setAccessToken(JWTUtil.generateToken(Map.of("username", user.getUsername()))); // 与python服务保持一致
+        UserLoginVO userLoginVo = new UserLoginVO();
+        userLoginVo.setAccessToken(JWTUtil.generateToken(Map.of(GConstants.JWT_TOKEN_USERNAME_KEY, user.getUsername()))); // 与python服务保持一致
         userLoginVo.setTokenType("Bearer");
 
         return Result.ok(userLoginVo);
@@ -75,6 +78,39 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
                         user.isActive(),
                         user.isSuperuser(),
                         user.getId()
+                )
+        );
+    }
+
+    @Override
+    public Result<UserVO> getUserInfo(String token) {
+        // 1. 校验token
+        if (!JWTUtil.validateToken(token)) {
+            return Result.error(ErrorConstants.UNAUTHORIZED);
+        }
+
+        // 2. 解析token
+        Claims claims = JWTUtil.getClaims(token);
+        String username;
+
+        if(claims == null || (username = claims.get(GConstants.JWT_TOKEN_USERNAME_KEY).toString()) == null) {
+            return Result.error(ErrorConstants.UNAUTHORIZED);
+        }
+
+        // 3. 查询用户
+        User user = baseMapper.getUserByUsername(username);
+
+        if(user == null) {
+            return Result.error(ErrorConstants.USER_NOT_EXIST);
+        }
+
+        return Result.ok(
+                new UserVO(
+                        user.getId(),
+                        user.getUsername(),
+                        user.getEmail(),
+                        user.isActive(),
+                        user.isSuperuser()
                 )
         );
     }

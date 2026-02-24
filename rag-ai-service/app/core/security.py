@@ -7,6 +7,8 @@ from fastapi import Depends, HTTPException, status, Security
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from sqlalchemy.orm import Session
 from app.db.session import get_db
+from app.feign.feign_client import FeignClient
+from app.feign.user import UserServiceFeign, get_user_service_feign
 from app.models.user import User
 from app.services.api_key import APIKeyService
 
@@ -29,33 +31,36 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt 
 
-def get_current_user(
-    db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    user_service_feign: FeignClient = Depends(get_user_service_feign)
 ) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("username")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = db.query(User).filter(User.username == username).first()
-    if user is None:
-        raise credentials_exception
-    if not user.is_active:
+        res = await user_service_feign.async_call(
+            path="/api/ai/auth/info",
+            headers={ "Authorization": f"Bearer {token}" }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if res["data"] is None or not res["data"]["active"]:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Inactive user",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return user 
+
+    user = User()
+    user.id = res["data"]["id"]
+    user.email = res["data"]["email"]
+    user.username = res["data"]["username"]
+    user.is_active = res["data"]["active"]
+    user.is_superuser = res["data"]["superuser"]
+    return user
 
 def get_api_key_user(
     db: Session = Depends(get_db),

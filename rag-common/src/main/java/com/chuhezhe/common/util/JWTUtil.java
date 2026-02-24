@@ -1,5 +1,6 @@
 package com.chuhezhe.common.util;
 
+import com.chuhezhe.common.constants.GConstants;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -49,12 +50,15 @@ public class JWTUtil {
      * @return Claims
      */
     public static Claims getClaims(String token) {
+        String tokenStr = token.startsWith(GConstants.JWT_TOKEN_PREFIX)
+                ? token.substring(GConstants.JWT_TOKEN_PREFIX.length())
+                : token;
         String secret = SpringContextHolder.getConfigProperty("jwt.secret", String.class, SECRET_KEY);
 
         return Jwts.parserBuilder()
                 .setSigningKey(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
                 .build()
-                .parseClaimsJws(token)
+                .parseClaimsJws(tokenStr)
                 .getBody();
     }
 

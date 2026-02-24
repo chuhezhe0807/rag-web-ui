@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserLoginVo {
+public class UserLoginVO {
 
     @JsonAlias("access_token")
     private String accessToken;

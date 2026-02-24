@@ -3,7 +3,7 @@ package com.chuhezhe.raguserservice.feign;
 import com.chuhezhe.common.entity.Result;
 import com.chuhezhe.raguserservice.dto.UserLoginDTO;
 import com.chuhezhe.raguserservice.dto.UserRegisterDTO;
-import com.chuhezhe.raguserservice.vo.UserLoginVo;
+import com.chuhezhe.raguserservice.vo.UserLoginVO;
 import com.chuhezhe.raguserservice.vo.UserRegisterVO;
 import feign.Headers;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -24,7 +24,7 @@ public interface UserServiceClient {
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE
     )
     @Headers("Content-Type: application/x-www-form-urlencoded") // 当前方法作为 Feign 客户端发送请求时，要携带的请求头
-    Result<UserLoginVo> login(@RequestBody UserLoginDTO userLoginDTO);
+    Result<UserLoginVO> login(@RequestBody UserLoginDTO userLoginDTO);
 
     /**
      * 注册

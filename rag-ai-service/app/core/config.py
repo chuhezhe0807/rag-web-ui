@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     APP_PORT: int = int(os.getenv("APP_PORT", "8000"))
     VERSION: str = "0.1.0"  # Project version
     API_V1_STR: str = "/api/ai"  # API version string
+    USER_SERVICE_NAME: str = "rag-user-service" # User Service name
 
     # MySQL settings
     MYSQL_SERVER: str = os.getenv("MYSQL_SERVER", "localhost")

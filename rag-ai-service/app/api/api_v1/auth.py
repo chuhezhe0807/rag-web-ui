@@ -1,14 +1,15 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt
 from requests.exceptions import RequestException
 
 from app.core import security
 from app.core.config import settings
 from app.db.session import get_db
+from app.feign.feign_client import FeignClient
+from app.feign.user import get_user_service_feign
 from app.models.user import User
 from app.schemas.base import ApiResponse
 from app.schemas.token import Token
@@ -17,27 +18,35 @@ from app.schemas.user import UserCreate, UserResponse
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-def get_current_user(
-    db: Session = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    user_service_feign: FeignClient = Depends(get_user_service_feign)
 ) -> User:
-    credentials_exception = ApiResponse(
-        code=status.HTTP_401_UNAUTHORIZED,
-        codeDesc="Unauthorized",
-        message="Could not validate credentials"
-    )
-
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        username: str = payload.get("username")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = db.query(User).filter(User.username == username).first()
-    if user is None:
-        raise credentials_exception
+        res = await user_service_feign.async_call(
+            path="/api/ai/auth/info",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if res["data"] is None or not res["data"]["active"]:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Inactive user",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = User()
+    user.id = res["data"]["id"]
+    user.email = res["data"]["email"]
+    user.username = res["data"]["username"]
+    user.is_active = res["data"]["active"]
+    user.is_superuser = res["data"]["superuser"]
     return user
 
 @router.post("/register", response_model=ApiResponse[UserResponse])
