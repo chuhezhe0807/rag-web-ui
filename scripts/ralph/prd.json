@@ -101,8 +101,8 @@
         "Build/Typecheck passes (python -c \"from app.api.api_v1 import knowledge_base\" succeeds; python -c \"from app.api.api_v1.knowledge_base import router; assert all(r.path != '/' for r in router.routes if r.methods == {'GET'})\")"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "knowledge_base.py 整文件重写，只保留 POST /test-retrieval（chat 检索调用要用）和必要 import；原 add_processing_tasks_to_queue 等辅助函数跟着被删的 endpoint 一起清掉（无跨文件引用）。nacos-config/rag-gateway.yaml 删掉 rag-ai-service-knowledge-base 路由，加注释解释 Java route 是 KB 单一入口。test-retrieval 仍挂在 /api/ai/knowledge-base/test-retrieval（因为 api.py 里 prefix 还是 /knowledge-base），但网关只保留 Java 路由 /knowledge-base/**，所以外部走网关只能打到 Java；chat 服务在 rag-ai-service 进程内直接调用 router 不受影响。verified: `uv run python -c 'from app.api.api_v1 import knowledge_base'` 退出 0；`assert all(r.path != '/' for r in router.routes if r.methods == {'GET'})` 通过（唯一 route 是 POST /test-retrieval）；`uv run python -c 'import app.main'` 退出 0。"
     },
     {
       "id": "US-008",

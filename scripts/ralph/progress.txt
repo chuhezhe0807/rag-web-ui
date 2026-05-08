@@ -10,6 +10,8 @@
 - ragwebui schema 真实源：.dockervolumes/mysql/sql/01_schema.sql（由 alembic head 编译而成）+ alembic 自身；二者须同步演进。01_schema.sql 末尾 `alembic_version` 种入当前 head，保证容器首启后 `alembic upgrade head` 是 no-op
 - docker-entrypoint-initdb.d 下的 SQL 只在 mysql data 目录为空时触发；已经有数据的环境改 schema 需手动 `docker exec -i <db> mysql -uroot -proot < file.sql`（CREATE TABLE IF NOT EXISTS 可保证幂等）
 - Feign 客户端路径 = 目标 controller 的 `@RequestMapping` + 方法 `@GetMapping/@PostMapping`；只写方法级路径会被网关当成根路径匹配→直连服务时也对不上。审 Feign 路径务必对照目标 controller 的类级 RequestMapping
+- 职责分工：KB 的 CRUD / upload / preview / process 归 Java（rag-knowledge-service + rag-document-service），Python 侧只做 chat / retrieval / api-keys / openapi。碰到 KB 写操作代码在 Python 里出现 → 基本都是迁移遗留，该删
+- rag-ai-service/app/main.py 的总 prefix 是 settings.API_V1_STR (= /api/ai)，再叠加 api_v1/api.py 里各 router 的 prefix；看 Python 端点的完整路径要两段拼起来算
 
 ---
 
@@ -105,4 +107,35 @@
   - 审 Feign 客户端与 target endpoint 不对齐时，先看 target 是否已经"顺带"做了另一次调用想要的事（这里 /upload 已经返回 upload record id）。优先消费现成返回值而不是新增端点，避免数据双写
   - rag-knowledge-service KnowledgeBaseService 原 uploadKnowledgeBaseDocuments 里还有另一个 pre-existing bug：`new File("temp/" + multipartFile.getOriginalFilename())` 从未写入过内容，`file.length()` 永远返回 0，`FileUtil.calculateFileSHA256(file)` 也算的是空文件的 hash。不在 US-006 的 scope，但做后续 upload 流程调试时要记得
   - 业务模块 pom 缺 spring-boot-starter-test 是跨模块的常见坑：rag-document-service（US-003 修）、rag-knowledge-service（US-006 修）；下次遇到 rag-user-service / rag-gateway 跑 package 挂 testCompile 时直接按同样方式补即可
+---
+
+## 2026-05-08 - US-007
+- 整文件重写 rag-ai-service/app/api/api_v1/knowledge_base.py：
+  - 删掉 POST ''、GET ''、GET /{kb_id}、PUT /{kb_id}、DELETE /{kb_id}、
+    POST /{kb_id}/documents/upload、POST /{kb_id}/documents/preview、
+    POST /{kb_id}/documents/process、GET /{kb_id}/documents/tasks、
+    GET /{kb_id}/documents/{doc_id}、POST /cleanup，以及仅服务于 /process 的
+    add_processing_tasks_to_queue 辅助
+  - 只保留 POST /test-retrieval，imports 同步精简
+  - 顶部 module docstring 说清职责边界和后续加端点的约束
+- nacos-config/rag-gateway.yaml：删 `rag-ai-service-knowledge-base` 路由
+  (Path=/api/ai/knowledge-base/**)，加注释解释 Java `/knowledge-base/**` 为
+  KB 单一入口
+- 质量检查：
+  - `uv run python -c "from app.api.api_v1 import knowledge_base"` 退出 0
+  - `uv run python -c "from app.api.api_v1.knowledge_base import router; \
+     assert all(r.path != '/' for r in router.routes if r.methods == {'GET'})"` 通过
+  - `uv run python -c "import app.main"` 退出 0（整个 FastAPI app 可装载）
+- 文件变更：
+  - M rag-ai-service/app/api/api_v1/knowledge_base.py（576 → ~80 行）
+  - M nacos-config/rag-gateway.yaml（gitignored）
+- **Learnings for future iterations:**
+  - test-retrieval 还挂在 /api/ai/knowledge-base/test-retrieval 下（api_v1/api.py
+    的 prefix 没动），网关删路由后外部只能走 Java `/knowledge-base/**`，
+    Python 的 test-retrieval 变成仅进程内/直连可达。如果将来前端需要在浏览器里
+    点它，要么在 api_v1/api.py 改 prefix 把它挪出 /knowledge-base 空间，
+    要么给网关专门加一条 /api/ai/knowledge-base/test-retrieval → rag-ai-service
+    的单点路由
+  - Python 端点全路径 = settings.API_V1_STR + api_v1/api.py prefix + 文件内 @router 路径，三段拼起来；别只看 @router.post 的字符串
+  - FastAPI `router.routes` 里每个 r.methods 是 `set[str]`，断言里比较记得用 `{'GET'}` 这种 set 字面量
 ---
