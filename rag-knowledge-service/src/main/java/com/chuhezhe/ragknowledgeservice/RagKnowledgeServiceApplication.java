@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.env.Environment;
@@ -12,6 +13,7 @@ import org.springframework.core.env.Environment;
 @Slf4j
 @SpringBootApplication
 @ComponentScan("com.chuhezhe")
+@EnableDiscoveryClient
 @MapperScan("com.chuhezhe.ragknowledgeservice.mapper")
 @EnableFeignClients(basePackages = "com.chuhezhe.ragknowledgeservice.feign", defaultConfiguration = FeignConfiguration.class)
 public class RagKnowledgeServiceApplication {

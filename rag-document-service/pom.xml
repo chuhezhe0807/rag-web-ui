@@ -55,17 +55,6 @@
         <!-- US-010 Option B：embedding + vector store 全部交给 Python rag-ai-service，
              Java 不再需要 spring-ai 的 chroma / openai starter，也不再持有 provider+model 配置 -->
 
-        <!-- Nacos Discovery -->
-        <dependency>
-            <groupId>com.alibaba.cloud</groupId>
-            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
-        </dependency>
-
-        <dependency>
-            <groupId>com.alibaba.cloud</groupId>
-            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
-        </dependency>
-
         <!-- test: spring-boot-starter-test 自带 junit-jupiter + spring-boot-test；
              没有它 src/test 下的骨架测试类连编译都过不了，-DskipTests 也救不了 -->
         <dependency>
