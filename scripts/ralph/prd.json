@@ -71,8 +71,8 @@
         "Build/Typecheck passes (cd rag-document-service && ./mvnw -DskipTests package)"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "@GetMapping(\"/{kb_id}\") → @GetMapping(\"/knowledge-base/{kb_id}\")，与 rag-knowledge-service KnowledgeBaseController 的 @RequestMapping(\"/knowledge-base\") + @GetMapping(\"/{kb_id}\") 拼出的完整路径一致。verified: ./mvnw -DskipTests package 退出码 0；端到端 404 → 200 验证留给 US-013 smoke 脚本。"
     },
     {
       "id": "US-006",

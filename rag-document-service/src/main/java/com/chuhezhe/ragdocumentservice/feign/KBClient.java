@@ -13,7 +13,9 @@ public interface KBClient {
 
     /**
      * 获取指定知识库
+     * 对齐 rag-knowledge-service KnowledgeBaseController 的 @RequestMapping("/knowledge-base")
+     * + @GetMapping("/{kb_id}")，完整路径 /knowledge-base/{kb_id}
      */
-    @GetMapping("/{kb_id}")
+    @GetMapping("/knowledge-base/{kb_id}")
     Result<List<KnowledgeBaseVO>> getKnowledgeBase(@PathVariable("kb_id") Integer kbId);
 }

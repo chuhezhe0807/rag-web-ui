@@ -9,6 +9,7 @@
 - `-DskipTests` 只跳过执行不跳过编译；要彻底跳过测试编译用 `-Dmaven.test.skip=true`。业务模块必须显式依赖 spring-boot-starter-test(test scope)，否则 src/test 骨架类连编译都过不了
 - ragwebui schema 真实源：.dockervolumes/mysql/sql/01_schema.sql（由 alembic head 编译而成）+ alembic 自身；二者须同步演进。01_schema.sql 末尾 `alembic_version` 种入当前 head，保证容器首启后 `alembic upgrade head` 是 no-op
 - docker-entrypoint-initdb.d 下的 SQL 只在 mysql data 目录为空时触发；已经有数据的环境改 schema 需手动 `docker exec -i <db> mysql -uroot -proot < file.sql`（CREATE TABLE IF NOT EXISTS 可保证幂等）
+- Feign 客户端路径 = 目标 controller 的 `@RequestMapping` + 方法 `@GetMapping/@PostMapping`；只写方法级路径会被网关当成根路径匹配→直连服务时也对不上。审 Feign 路径务必对照目标 controller 的类级 RequestMapping
 
 ---
 
@@ -70,4 +71,17 @@
   - PRD 列的"9 张表"漏了 messages；如果只按 9 张表出 SQL，chat 功能一定会挂。凡是按 alembic head 生成 schema 的任务，要以 migration 串为准、PRD 清单为辅
   - 以后每新增一条 alembic migration：必须同步把 DDL 补进 01_schema.sql，并把 alembic_version 种入值改成新的 head revision id，否则首启后 `alembic upgrade head` 会把 migration 重跑一遍
   - docker-entrypoint-initdb.d 在 data 目录非空时不跑；想验证 init 链路得先清 `.dockervolumes/mysql/data` 然后重启容器
+---
+
+## 2026-05-08 - US-005
+- 编辑 rag-document-service/.../feign/KBClient.java：`@GetMapping("/{kb_id}")` → `@GetMapping("/knowledge-base/{kb_id}")`
+  - 原路径缺少类级前缀，实际转发到 rag-knowledge-service 时拿到的是 `GET /{kb_id}`，对不上 KnowledgeBaseController 的 `@RequestMapping("/knowledge-base") + @GetMapping("/{kb_id}")`，必然 404
+  - 方法注释同步补上，写清完整路径由来
+- 质量检查：`cd rag-document-service && ./mvnw -DskipTests package` 退出码 0（BUILD SUCCESS）
+- 文件变更：
+  - M rag-document-service/src/main/java/com/chuhezhe/ragdocumentservice/feign/KBClient.java
+- **Learnings for future iterations:**
+  - Spring Cloud Feign 客户端的路径匹配 target controller 的"类级 @RequestMapping + 方法级 @XxxMapping"拼出来的完整路径；写 Feign 时要对着 target controller 类头看，不能只看方法签名
+  - 后续审其他 Feign client（如 DocumentServiceClient）时同样要按这条规则逐一对照，US-006 就是类似的路径对齐问题
+  - POST /api/ai/documents/process 之前返回 404 的根因就是这里；端到端活体验证留给 US-013 的 e2e-smoke.sh
 ---
