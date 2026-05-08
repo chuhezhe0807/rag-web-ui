@@ -20,6 +20,7 @@
 - embedding / 向量库职责：Python rag-ai-service 独占，Java 通过 Feign 打 `POST /internal/embed-and-index` 委托。`provider + model + api-key` 只在 Python 一份（settings.EMBEDDINGS_PROVIDER + 对应 *_API_KEY / *_MODEL），Java 不再引 spring-ai starter、不读 ai.embedding-model.* 配置
 - Chroma collection 命名统一为 `kb_{kb_id}`：Python 的 VectorStoreFactory / test-retrieval 用这个前缀，Java 委托写入的时候也把 kb_id 传给 Python、由 Python 写同名 collection，避免写单 collection `RagCollection`、读 `kb_{kb_id}` 的老坑
 - `/internal/**` 路由：rag-ai-service 内部调用空间；main.py 独立挂一个 internal_router，rag-gateway 不配对应 route，所以外部网络打不进来，但 Nacos 集群内的 Java 服务走服务发现可直连
+- Java 构建入口：`bash scripts/ralph/build-java.sh`，按依赖顺序跑 6 模块 clean install/package -DskipTests。根 pom 里 spring-boot-maven-plugin 已经在 pluginManagement 带上 version + repackage execution，子模块 by-artifactId 继承即可；纯库模块（rag-common）不要声明 spring-boot-maven-plugin，否则被 repackage 会找不到 main class
 
 ---
 
@@ -320,4 +321,49 @@
     在 US-010 里随 AIConfig 整个删除而失效，这是刻意的：Java 不再需要 api-key，
     Python 那边的 EmbeddingsFactory 在 create() 时会读 settings，缺失则由
     Python 自己抛；不要在 Java 这边重造一份失效的 fail-fast
+---
+
+## 2026-05-08 - US-011
+- 新增 scripts/ralph/build-java.sh：
+  - `set -euo pipefail`，REPO_ROOT 从脚本位置推算（不依赖 cwd）
+  - 按依赖顺序跑 6 个模块：rag-common / rag-common-service 用 `clean install`（装
+    本地 Maven 仓库供后续模块解析），rag-user-service / rag-document-service /
+    rag-knowledge-service / rag-gateway 用 `clean package -DskipTests`
+  - 末尾遍历四个业务模块的 target 下 jar，缺一个就退出 1
+  - chmod +x 可执行
+- 修根 pom：本项目 dependencyManagement import spring-boot-dependencies 但**没**
+  继承 spring-boot-starter-parent，子模块里 `spring-boot-maven-plugin` 既没 version
+  也没绑 repackage goal，先前 `./mvnw package` 产的都是 ~20KB 瘦 jar（无法 java -jar
+  直接启动）。在 build/pluginManagement 里显式声明：
+    spring-boot-maven-plugin version=${spring.boot.version} + execution id=repackage
+  子模块保持原样（by artifactId 引用）就会自动继承
+- 去掉 rag-common/pom.xml 的 build/plugins：rag-common 是纯库模块，无
+  @SpringBootApplication；现在父 pom 把 repackage 绑到了 package 阶段，保留该插件
+  会报"Unable to find a single main class"
+- 没有改 rag-common-service/pom.xml（它的 build 段原本就是空的，父 pom 的
+  pluginManagement 对它无副作用；install 出来的 jar 只是普通 artifact，不做
+  repackage）
+- 质量检查：
+  - `bash -n scripts/ralph/build-java.sh` 通过
+  - `bash scripts/ralph/build-java.sh` 退出 0，6 个模块全部 BUILD SUCCESS
+  - fat jar 校验：rag-user-service 62 MB / rag-document-service 93 MB /
+    rag-knowledge-service 51 MB / rag-gateway 53 MB；MANIFEST.MF 四个都含
+    `Main-Class: org.springframework.boot.loader.launch.JarLauncher` +
+    正确的 `Start-Class`
+- 文件变更：
+  - A scripts/ralph/build-java.sh（755）
+  - M pom.xml（加 build/pluginManagement/spring-boot-maven-plugin）
+  - M rag-common/pom.xml（删 build/plugins/spring-boot-maven-plugin）
+- **Learnings for future iterations:**
+  - 想判断一个 Spring Boot jar 是不是 runnable 胖 jar：看大小（~50MB+）并 unzip
+    META-INF/MANIFEST.MF 里有没有 `Main-Class: org.springframework.boot.loader.
+    launch.JarLauncher` + `Start-Class: <你的 @SpringBootApplication 类>`
+  - 不继承 spring-boot-starter-parent 的项目，子模块必须要么各自写全
+    spring-boot-maven-plugin 的 version + executions，要么靠父 pom 的
+    pluginManagement 下发；不要两者都漏
+  - 纯库模块（没有 @SpringBootApplication）不要声明 spring-boot-maven-plugin，
+    父 pom 一旦把 repackage 绑到 package 阶段就会连锁爆炸
+  - Maven 中央仓库偶尔 handshake 失败（今天跑 build-java.sh 第一次下
+    maven-shared-utils 就 "Remote host terminated the handshake"），直接重跑一次
+    大概率就好，不要改 settings.xml
 ---

@@ -162,8 +162,8 @@
         "Build/Typecheck passes (bash scripts/ralph/build-java.sh exits 0)"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "新增 scripts/ralph/build-java.sh：set -euo pipefail，REPO_ROOT 从脚本位置推算，按 PRD 顺序跑 common/common-service install + 4 个业务模块 package -DskipTests，末尾列出 4 个 fat jar 路径并校验存在。构建时发现根 pom 只 import 了 spring-boot-dependencies 没继承 spring-boot-starter-parent，`spring-boot-maven-plugin` 没有 version 也没 bind repackage goal，先前产的都是 ~20KB 瘦 jar；在根 pom 的 build/pluginManagement 里加上 spring-boot-maven-plugin（version=${spring.boot.version}）+ repackage execution，子模块引用 by artifactId 自动继承；同时把 rag-common（纯库模块，无 @SpringBootApplication）里的 spring-boot-maven-plugin 声明整段去掉，否则父 pom 绑的 repackage 会因找不到 main class 构建失败。verified: bash scripts/ralph/build-java.sh 退出 0，rag-user-service 62MB / rag-document-service 93MB / rag-knowledge-service 51MB / rag-gateway 53MB 四个 jar 的 MANIFEST 都含 `Main-Class: org.springframework.boot.loader.launch.JarLauncher` + 对应 Start-Class。"
     },
     {
       "id": "US-012",

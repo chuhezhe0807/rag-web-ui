@@ -88,13 +88,10 @@
         </dependency>
     </dependencies>
 
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    <!-- rag-common 是纯库模块，无 @SpringBootApplication；原先声明的
+         spring-boot-maven-plugin 在 US-011 里把 repackage 绑进 package 阶段后，
+         会因找不到 main class 构建失败，所以整个 build/plugins 去掉。其余子模块
+         （user/document/knowledge/gateway）保留，从父 pom 的 pluginManagement
+         继承 version + repackage execution -->
 
 </project>

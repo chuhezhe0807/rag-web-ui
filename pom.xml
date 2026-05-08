@@ -153,6 +153,28 @@
     </profiles>
 
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- 本项目用 dependencyManagement import spring-boot-dependencies，
+                     而非继承 spring-boot-starter-parent，所以 spring-boot-maven-plugin
+                     的 version + repackage execution 要在这里显式声明，子模块
+                     才能产出 runnable fat jar，否则 package 出来的只是 ~20KB 的
+                     瘦 jar（US-011 的验证要求是 runnable 胖 jar）-->
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <version>${spring.boot.version}</version>
+                    <executions>
+                        <execution>
+                            <id>repackage</id>
+                            <goals>
+                                <goal>repackage</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
