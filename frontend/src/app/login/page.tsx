@@ -29,7 +29,7 @@ export default function LoginPage() {
       formUrlEncoded.append("username", username as string);
       formUrlEncoded.append("password", password as string);
 
-      const res = await api.post("/auth/token", formUrlEncoded, {
+      const res = await api.post("/api/ai/auth/token", formUrlEncoded, {
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },

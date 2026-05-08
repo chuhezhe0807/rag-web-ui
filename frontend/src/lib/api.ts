@@ -6,8 +6,15 @@ interface FetchOptions extends Omit<RequestInit, 'body' | 'headers'> {
 /**
  * 带/的路径是根相对路径，基于当前域名 / 端口的根目录拼接，不受页面路径层级影响；
  * 不带/的路径是页面相对路径，基于当前页面的 URL 路径拼接，易受页面层级影响导致请求错误；
+ *
+ * US-014 后调整：网关 rag-gateway 有两种前缀
+ *  - /knowledge-base/**  → Java rag-knowledge-service
+ *  - /api/ai/auth|chat|documents|api-keys/**  → 各自 Java / Python 服务
+ * 所以 BASE_URL **不再**在这里硬写 /api/ai，改由调用点传完整路径，BASE_URL 只
+ * 决定"直连网关还是走同域代理"。默认空串（走 Next.js 同域），NEXT_PUBLIC_API_URL
+ * 可覆盖为 http://127.0.0.1:8080（本地直连网关）。
  */
-export const BASE_URL = "/api/ai"
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {

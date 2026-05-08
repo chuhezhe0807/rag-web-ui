@@ -28,6 +28,10 @@
 - document process 任务状态枚举值是**小写** pending/processing/completed/failed（ProcessingTask.STATUS_* 常量就是小写），虽然 PRD 常写 COMPLETED，脚本里要 `tr [:upper:] [:lower:]` 归一
 - KB 上传接口是 `PUT /knowledge-base/{kb_id}/documents/upload` 而不是 POST；multipart 字段名 `file`（controller 的 `@RequestParam("file") List<MultipartFile>`）
 - Fixtures 给 e2e 测试用的专有名词要保证全仓唯一，否则 chat 返回里随便命中一个通用词也被判通过；当前用 Zephyr-7 / Calipso-Mirror-Omega / Nadia Okonkwo / Tenerife Meson / muon-clustered 等编造词
+- 前端 `src/lib/api.ts` 的 BASE_URL 靠 `process.env.NEXT_PUBLIC_API_URL` 驱动（默认空串=同域），**不再**自动拼 `/api/ai`；调用点自己写全路径，这样 Java 的 `/knowledge-base/**`（不带 /api/ai 前缀）和 Python 的 `/api/ai/chat/**` 可以共存
+- 前端 auth header 用 `Authorization: Bearer <token>`，与 Java `GConstants.JWT_TOKEN_HEADER = "Authorization"` + `JWTUtil.validateToken`（自动 strip `Bearer ` 前缀）对齐；PRD US-014 里写的 "X-Token" 是笔误，不要照搬
+- 上传端点是 **PUT** `/knowledge-base/{kb}/documents/upload`，multipart field 名 **`file`**（Java `@RequestParam("file") List<MultipartFile>`）；不是 POST，不是 `files`
+- 已知前端遗留坑（单独起 follow-up story）：preview / citation document 详情 / test-retrieval 三条路由在 US-007 之后没有等价后端端点；Java Result wrapper `{code,codeDesc,message,data}` 跟前端默认直接解包 `data` 字段的假设也不一致
 
 ---
 
@@ -476,4 +480,61 @@
   - chat 第二步返的是 SSE 流（text/event-stream + x-vercel-ai-data-stream: v1），
     curl 默认会把整个流 buffer 成字符串——对 grep 来说无所谓，但如果以后要
     检查 token-by-token 或超时提前退出，要改成 `--no-buffer` + 行式解析
+---
+
+## 2026-05-08 - US-014
+- frontend/.env.development 新建：`NEXT_PUBLIC_API_URL=http://127.0.0.1:8080`。
+  `.gitignore` 的 `frontend/.env` 是精确匹配，不会屏蔽 .env.development，可入库
+- src/lib/api.ts：BASE_URL 从硬写 "/api/ai" 改成 `process.env.NEXT_PUBLIC_API_URL
+  ?? ""`；调用点自己写全路径。Authorization header 原封不动
+- 调用点路径统一：
+  - auth/chat/api-keys/documents/process → 加 `/api/ai/` 前缀
+  - /knowledge-base → 保持（这样经过 BASE_URL 拼出来就是 Java 的
+    /knowledge-base/**，不再是错误的 /api/ai/knowledge-base/**）
+- 文档上传从 POST 改成 PUT（KnowledgeBaseController 写的是 @PutMapping），
+  multipart field 名 `files` → `file`
+- process/tasks 两个端点随 US-007 删除，改成：
+  - POST /api/ai/documents/process 带 ProcessDocDTO shape
+    {knowledgeId, processDocItemDTOList:[{documentUploadId, skipProcess}]}
+  - 状态查询：Java 只有 GET /api/ai/documents/process/{taskId} 单条，
+    前端改成 Promise.all 并发多次单查再拼回原 TaskStatusMap shape
+- 对目前后端没有等价路由的几处（preview / citation 文档详情 / test-retrieval）
+  加 TODO 注释指向 follow-up story，避免以后审 frontend 代码时又浪费时间
+  查为什么 404
+- typecheck 修：把 `pollTaskStatus` 回填的 TaskStatus 补齐 document_id /
+  error_message / upload_id / file_name 四个必填字段，避免 TS 接口不完整的
+  TS2322 报错
+- 质量检查：
+  - `npm install`（回避 pnpm-lock 版本冲突；新版 pnpm ≠ 旧 lock）
+  - `npx tsc --noEmit` 无输出，即 zero error
+- 文件变更：
+  - A frontend/.env.development
+  - M frontend/src/lib/api.ts
+  - M frontend/src/app/dashboard/chat/new/page.tsx
+  - M frontend/src/app/dashboard/chat/page.tsx
+  - M frontend/src/app/dashboard/chat/[id]/page.tsx
+  - M frontend/src/app/dashboard/page.tsx
+  - M frontend/src/app/dashboard/api-keys/page.tsx
+  - M frontend/src/app/dashboard/knowledge/[id]/upload/page.tsx
+  - M frontend/src/app/login/page.tsx
+  - M frontend/src/app/register/page.tsx
+  - M frontend/src/components/knowledge-base/document-upload-steps.tsx
+  - M frontend/src/components/chat/answer.tsx
+  - M frontend/src/app/dashboard/test-retrieval/[id]/page.tsx
+- **Learnings for future iterations:**
+  - PRD US-014 说 "X-Token"，其实 Java GConstants.JWT_TOKEN_HEADER 定义
+    的是 "Authorization"；永远以代码里实际 header 名为准，PRD 是向导不是
+    契约
+  - upload 是 PUT 不是 POST；FormData 的 field 名是 `file` 不是 `files`；
+    两个都错了就 415/400，日志里看不出差异，要顺着 controller 注解反查
+  - Next.js 的 ai SDK `useChat({api: url})` 不走 src/lib/api.ts 的包装，
+    需要自己拼 BASE_URL；改 BASE_URL 配置时这里是最容易漏的点
+  - pnpm-lock.yaml 版本冲突时**不要** `pnpm install --force`（会重写锁文
+    件，对提交是大改），用 `npm install` 直接按 package.json 装，做
+    typecheck 够用
+  - Java Result wrapper `{code,codeDesc,message,data}` 跟前端大多数调用
+    假设的"直接返 data"不一致；现在依靠 api.ts 的 `if (data.code != null &&
+    data.code !== 200) throw` 在失败时抛，但**成功时**前端收到的是整个
+    wrapper，调用点访问 `.length` / `.id` 之类都会错。这属于"单独一条
+    story"级别的整改，已在 progress.txt 里归档
 ---

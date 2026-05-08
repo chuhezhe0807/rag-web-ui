@@ -32,6 +32,13 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 例外：US-014 把本地开发默认的 gateway 地址（NEXT_PUBLIC_API_URL=...）
+# 放在 .env.development 里；里面没有密钥，需要进 git 让全队共享
+!.env.development
+
+# 本仓库用 pnpm（pnpm-lock.yaml 是真实源），用 npm install 回退时会产生
+# package-lock.json，不要让它进 git 与 pnpm-lock 冲突
+package-lock.json
 
 # vercel
 .vercel

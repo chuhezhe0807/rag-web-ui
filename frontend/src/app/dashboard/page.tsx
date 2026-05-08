@@ -40,7 +40,7 @@ export default function DashboardPage() {
       try {
         const [kbData, chatData] = await Promise.all([
           api.get("/knowledge-base"),
-          api.get("/chat"),
+          api.get("/api/ai/chat"),
         ]);
 
         setStats({

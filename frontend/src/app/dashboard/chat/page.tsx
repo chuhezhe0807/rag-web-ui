@@ -33,7 +33,7 @@ export default function ChatPage() {
 
   const fetchChats = async () => {
     try {
-      const data = await api.get("/chat");
+      const data = await api.get("/api/ai/chat");
       setChats(data);
     } catch (error) {
       console.error("Failed to fetch chats:", error);
@@ -50,7 +50,7 @@ export default function ChatPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this chat?")) return;
     try {
-      await api.delete(`/chat/${id}`);
+      await api.delete(`/api/ai/chat/${id}`);
       setChats((prev) => prev.filter((chat) => chat.id !== id));
       toast({
         title: "Success",

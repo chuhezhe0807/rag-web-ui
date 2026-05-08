@@ -65,6 +65,10 @@ export const Answer: FC<{
         if (infoMap[key]) continue;
 
         try {
+          // TODO(post-US-014): /knowledge-base/{kb}/documents/{doc} 在 US-007
+          // 删除了 Python 实现，Java 侧也没等价端点。citation 的 document
+          // 名称暂时取不到，这个 catch 里会 fallthrough 到 console.error；
+          // 等 US-014 补一条"文档详情端点 in Java"的 follow-up 后再打开
           const [kb, doc] = await Promise.all([
             api.get(`/knowledge-base/${kb_id}`),
             api.get(`/knowledge-base/${kb_id}/documents/${document_id}`),

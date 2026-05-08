@@ -56,7 +56,7 @@ export default function NewChatPage() {
     setIsSubmitting(true);
 
     try {
-      const data = await api.post("/chat", {
+      const data = await api.post("/api/ai/chat", {
         title,
         knowledge_base_ids: [selectedKB],
       });

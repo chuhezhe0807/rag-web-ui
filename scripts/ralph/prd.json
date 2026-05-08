@@ -208,8 +208,8 @@
         "Build/Typecheck passes (cd frontend && npm run build OR npx tsc --noEmit)"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "frontend/.env.development 新建（NEXT_PUBLIC_API_URL=http://127.0.0.1:8080，不在 .gitignore 的 `frontend/.env` 精确匹配里，能入库）。src/lib/api.ts 的 BASE_URL 从硬写 '/api/ai' 改成 `process.env.NEXT_PUBLIC_API_URL ?? ''`，调用点自己写全路径。全局改路：KB CRUD 直接走 /knowledge-base（Java），chat/api-keys/auth 加 /api/ai/ 前缀（Python 或 Java /api/ai/auth）。关键修正：文档上传 POST→PUT（Java KnowledgeBaseController 写的是 @PutMapping），multipart field 'files'→'file'（Java @RequestParam(\"file\") List<MultipartFile>）。process/tasks 老端点在 US-007 随 Python 一起删，改指向 Java 的 /api/ai/documents/process（payload reshape 成 ProcessDocDTO）+ /api/ai/documents/process/{taskId}（Result<String>，批量查改成并发单查再合并 map）。Auth header：PRD 笔误写成 X-Token，实际 Java GConstants.JWT_TOKEN_HEADER = 'Authorization'，沿用原来的 `Authorization: Bearer ${token}`（JWTUtil 会 strip Bearer 前缀）。遗留坑（加 TODO 注释，留给 follow-up story）：preview / citation document 详情 / test-retrieval 端点现在没有对应 Java/Python 后端路由，前端仍按旧路径调但会 404/405；Java Result wrapper 与 frontend 默认解包 shape 也不一致（另一类 story）。verified: `npm install` (使用 package.json，规避 pnpm-lock 版本冲突) + `npx tsc --noEmit` 无输出（pass）；浏览器 e2e 校验（dev-browser skill）需人先起 stack + frontend dev server 再做。"
     }
   ]
 }

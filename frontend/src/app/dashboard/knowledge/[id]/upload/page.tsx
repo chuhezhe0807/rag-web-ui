@@ -94,7 +94,9 @@ export default function UploadPage({ params }: { params: { id: string } }) {
     formData.append("file", file);
 
     try {
-      const result: UploadResult = await api.post(
+      // Java controller: PUT /knowledge-base/{kb}/documents/upload，
+      // multipart 字段名 "file"（上面 formData 已经用对了）
+      const result: UploadResult = await api.put(
         `/knowledge-base/${params.id}/documents/upload`,
         formData
       );
@@ -139,16 +141,21 @@ export default function UploadPage({ params }: { params: { id: string } }) {
 
     setIsProcessing(true);
     try {
-      const uploadResults = uploadedFiles.map((f) => ({
-        upload_id: f.uploadId,
-        file_name: f.file.name,
-        skip_processing: false,
-      }));
-
-      const response = await api.post(
-        `/knowledge-base/${params.id}/documents/process`,
-        uploadResults
-      );
+      // Java ProcessDocDTO shape: {knowledgeId, processDocItemDTOList:
+      // [{documentUploadId, skipProcess}]}；返 Result<{tasks:[{taskId,uploadId}]}>
+      const processResp = await api.post(`/api/ai/documents/process`, {
+        knowledgeId: Number(params.id),
+        processDocItemDTOList: uploadedFiles.map((f) => ({
+          documentUploadId: f.uploadId,
+          skipProcess: false,
+        })),
+      });
+      const javaTasks: Array<{ taskId: number; uploadId: number }> =
+        processResp?.data?.tasks ?? [];
+      // 适配原来的 {task_id, upload_id} 下划线 shape，避免改 ProcessingTask 类型
+      const response = {
+        tasks: javaTasks.map((t) => ({ task_id: t.taskId, upload_id: t.uploadId })),
+      };
 
       setProcessingTasks(response.tasks);
 
@@ -182,10 +189,38 @@ export default function UploadPage({ params }: { params: { id: string } }) {
     if (processingTasks.length === 0) return;
 
     try {
-      const taskIds = processingTasks.map((t) => t.task_id).join(",");
-      const status: Record<string, TaskStatus> = await api.get(
-        `/knowledge-base/${params.id}/documents/tasks?task_ids=${taskIds}`
+      // Java 侧没有 batch tasks 端点，并发查每个 taskId 再拼成原有 map shape；
+      // Result<String> 里只含 status，其余字段 Java 没返回，这里用 uploadId +
+      // file_name 回填，保持下游 UI 能正常读
+      const taskToUpload = new Map<number, ProcessingTask>(
+        processingTasks.map((t) => [t.task_id, t])
       );
+      const fileByUpload = new Map<number, FileStatus | undefined>(
+        files.map((f) => [f.uploadId as number, f])
+      );
+      const taskIds = processingTasks.map((t) => t.task_id);
+      const statusArr = await Promise.all(
+        taskIds.map((taskId) =>
+          api.get(`/api/ai/documents/process/${taskId}`).then(
+            (r: { data?: string }): [string, TaskStatus] => {
+              const task = taskToUpload.get(taskId);
+              const uploadId = task?.upload_id ?? 0;
+              const related = fileByUpload.get(uploadId);
+              return [
+                String(taskId),
+                {
+                  document_id: related?.documentId ?? null,
+                  status: r?.data ?? "pending",
+                  error_message: null,
+                  upload_id: uploadId,
+                  file_name: related?.file.name ?? "",
+                },
+              ];
+            }
+          )
+        )
+      );
+      const status: Record<string, TaskStatus> = Object.fromEntries(statusArr);
 
       let allCompleted = true;
       setFiles((prev) =>

@@ -141,11 +141,14 @@ export function DocumentUploadSteps({
     setIsLoading(true);
     try {
       const formData = new FormData();
+      // Java DocumentController @RequestParam("file") List<MultipartFile>
+      // 期望同名多值（file=...&file=...），不是 "files"
       pendingFiles.forEach((fileStatus) => {
-        formData.append("files", fileStatus.file);
+        formData.append("file", fileStatus.file);
       });
 
-      const data = (await api.post(
+      // Java KnowledgeBaseController 定义的是 PUT 而不是 POST
+      const data = (await api.put(
         `/knowledge-base/${knowledgeBaseId}/documents/upload`,
         formData,
         {
@@ -197,6 +200,10 @@ export function DocumentUploadSteps({
   };
 
   // Step 2: Preview chunks
+  // TODO(post-US-014): preview 端点在 US-007 随 Python KB 路由一起被删掉，
+  // Java 侧目前也没实现（DocumentController 里 POST /preview 是空方法）。
+  // 此处仍沿用旧路径，真正修复要么走 /api/ai/documents/preview 等新端点，
+  // 要么前端直接去掉 preview 这步——单独起一个 story 处理
   const handlePreview = async () => {
     const selectedFile = files.find(
       (f) =>
@@ -234,6 +241,11 @@ export function DocumentUploadSteps({
   };
 
   // Step 3: Process documents
+  // US-014: 路径从 /knowledge-base/{kb}/documents/process（Python 已在
+  // US-007 删除）改为 Java 的 /api/ai/documents/process；payload shape
+  // 也改成 ProcessDocDTO：{knowledgeId, processDocItemDTOList:[{documentUploadId,
+  // skipProcess}]}。返回 Result<{tasks:[{taskId,uploadId}]}>；旧的 TaskResponse
+  // 里字段是下划线 task_id，这里临时包一层适配下面的 pollTaskStatus
   const handleProcess = async (uploadResults?: UploadResult[]) => {
     const resultsToProcess =
       uploadResults ||
@@ -251,10 +263,17 @@ export function DocumentUploadSteps({
 
     setIsLoading(true);
     try {
-      const data = (await api.post(
-        `/knowledge-base/${knowledgeBaseId}/documents/process`,
-        resultsToProcess
-      )) as TaskResponse;
+      const processResp = (await api.post(`/api/ai/documents/process`, {
+        knowledgeId: knowledgeBaseId,
+        processDocItemDTOList: resultsToProcess.map((r) => ({
+          documentUploadId: r.upload_id,
+          skipProcess: r.skip_processing ?? false,
+        })),
+      })) as { data?: { tasks?: Array<{ taskId: number; uploadId: number }> } };
+      const javaTasks = processResp?.data?.tasks ?? [];
+      const data: TaskResponse = {
+        tasks: javaTasks.map((t) => ({ task_id: t.taskId, upload_id: t.uploadId })),
+      };
 
       // Initialize task statuses
       const initialStatuses = data.tasks.reduce<TaskStatusMap>(
@@ -283,20 +302,26 @@ export function DocumentUploadSteps({
   };
 
   // Poll task status
+  // US-014: 老的 batch 端点 `/knowledge-base/{kb}/documents/tasks?task_ids=...`
+  // 在 US-007 被删；Java 侧现在只有单个 GET /api/ai/documents/process/{taskId}
+  // 返 Result<String>（只含 status 字符串）。所以这里改成并发多次单条查询，
+  // 再拼回原来的 TaskStatusMap 形状。取不到 document_id 和 error_message
+  // 等扩展字段时置 undefined，下游 UI 早已按 optional 处理
   const pollTaskStatus = async (taskIds: number[]) => {
     const poll = async () => {
       try {
-        const response = (await api.get(
-          `/knowledge-base/${knowledgeBaseId}/documents/tasks?task_ids=${taskIds.join(
-            ","
-          )}`
-        )) as TaskStatusResponse;
+        const responses = await Promise.all(
+          taskIds.map((taskId) =>
+            api
+              .get(`/api/ai/documents/process/${taskId}`)
+              .then((r: { data?: string }) => ({ taskId, status: (r?.data ?? "pending") as TaskStatusMap[number]["status"] }))
+          )
+        );
 
-        // Convert string keys to numbers
-        const data = Object.entries(response).reduce<TaskStatusMap>(
-          (acc, [key, value]) => ({
+        const data: TaskStatusMap = responses.reduce<TaskStatusMap>(
+          (acc, { taskId, status }) => ({
             ...acc,
-            [parseInt(key)]: value,
+            [taskId]: { document_id: 0, status },
           }),
           {}
         );

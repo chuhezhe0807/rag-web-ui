@@ -64,7 +64,12 @@ export default function TestPage({ params }: { params: { id: string } }) {
 
     setLoading(true);
     try {
-      const data = await api.post("/knowledge-base/test-retrieval", {
+      // TODO(post-US-014): Python test-retrieval 还挂在 /api/ai/knowledge-base/
+      // test-retrieval 下，但网关在 US-007 删掉了 /api/ai/knowledge-base/** 路由，
+      // 所以这个端点现在只能进程内访问。要让前端用上，需要在 rag-gateway.yaml
+      // 给 /api/ai/knowledge-base/test-retrieval 单独加一条路由，或者把 Python
+      // 的 prefix 从 /knowledge-base 挪开。单独开 story 处理
+      const data = await api.post("/api/ai/knowledge-base/test-retrieval", {
         query,
         kb_id: parseInt(params.id),
         top_k: parseInt(topK),

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useChat } from "ai/react";
 import { Send, User, Bot } from "lucide-react";
 import DashboardLayout from "@/components/layout/dashboard-layout";
-import { api, ApiError } from "@/lib/api";
+import { api, ApiError, BASE_URL } from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
 import { Answer } from "@/components/chat/answer";
 
@@ -57,7 +57,9 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     isLoading,
     setMessages,
   } = useChat({
-    api: `/api/ai/chat/${params.id}/messages`,
+    // `ai` SDK 的 useChat 会直接 fetch 这个 URL，不经过 src/lib/api.ts；
+    // 所以要自己拼 BASE_URL（默认空串走同域，本地开发走 NEXT_PUBLIC_API_URL）
+    api: `${BASE_URL}/api/ai/chat/${params.id}/messages`,
     headers: {
       Authorization: `Bearer ${
         typeof window !== "undefined"
@@ -82,7 +84,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
 
   const fetchChat = async () => {
     try {
-      const data: Chat = await api.get(`/chat/${params.id}`);
+      const data: Chat = await api.get(`/api/ai/chat/${params.id}`);
       const formattedMessages = data.messages.map((msg) => {
         if (msg.role !== "assistant" || !msg.content)
           return {
