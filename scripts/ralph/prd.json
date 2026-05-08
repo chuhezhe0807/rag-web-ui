@@ -176,8 +176,8 @@
         "Build/Typecheck passes (bash -n scripts/ralph/start-all.sh && bash -n scripts/ralph/check-nacos.sh)"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "start-all.sh：set -euo pipefail；docker compose -f docker-compose.dev.yml ps 校验 nacos/db/chromadb/minio 都 Up；`uv run python -m uvicorn app.main:app --host 0.0.0.0 --port 8000` 起 rag-ai-service；按 ls target/<module>-*.jar 起 rag-user-service(8081)/rag-knowledge-service(8082)/rag-document-service(8083)/rag-gateway(8080)；pid/log 写到 .run/<module>.{pid,log}（已 gitignore）；`wait_port` 用 `nc -z` 兜底 bash /dev/tcp，每个服务 90s 超时。check-nacos.sh：先 POST /nacos/v1/auth/login 拿 accessToken（Nacos 2.x 开启鉴权必走），再 GET /nacos/v1/ns/instance/list?serviceName=<name>&accessToken=...，用 python3 -c（注意不要用 f-string，否则跟 shell 单引号里的 \\\" 冲突；改用 .format()）解析 hosts，任一实例 healthy=True 则打绿色 ✓；5 个服务全 healthy 才 exit 0。verified: bash -n 两个脚本都通过；bash check-nacos.sh 在服务未启动时正确返回 `0 instances registered` + exit 1（证明 auth/parse 链路正确），所有 ✓ 的活体校验需要人先 bash start-all.sh 再跑。.gitignore 加 `/.run/` 避免 pid/log 进 git。"
     },
     {
       "id": "US-013",

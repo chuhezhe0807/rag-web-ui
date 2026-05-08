@@ -72,3 +72,6 @@ rag-ai-service/.env
 /.chromadb/
 
 nacos-config/
+
+# scripts/ralph/start-all.sh 写的 pid/log 目录（US-012）
+/.run/

@@ -21,6 +21,9 @@
 - Chroma collection 命名统一为 `kb_{kb_id}`：Python 的 VectorStoreFactory / test-retrieval 用这个前缀，Java 委托写入的时候也把 kb_id 传给 Python、由 Python 写同名 collection，避免写单 collection `RagCollection`、读 `kb_{kb_id}` 的老坑
 - `/internal/**` 路由：rag-ai-service 内部调用空间；main.py 独立挂一个 internal_router，rag-gateway 不配对应 route，所以外部网络打不进来，但 Nacos 集群内的 Java 服务走服务发现可直连
 - Java 构建入口：`bash scripts/ralph/build-java.sh`，按依赖顺序跑 6 模块 clean install/package -DskipTests。根 pom 里 spring-boot-maven-plugin 已经在 pluginManagement 带上 version + repackage execution，子模块 by-artifactId 继承即可；纯库模块（rag-common）不要声明 spring-boot-maven-plugin，否则被 repackage 会找不到 main class
+- 本地起栈三板斧：`docker compose -f docker-compose.dev.yml up -d` → `bash scripts/ralph/build-java.sh` → `bash scripts/ralph/start-all.sh`；pid/log 落在 `.run/`（gitignored），收尾用 `kill $(cat .run/*.pid)`
+- Nacos 2.x 开启了鉴权，naming open API（`/nacos/v1/ns/instance/list`）必须先 POST `/nacos/v1/auth/login` 拿 accessToken 再附在 query 里；否则返回 403 `"user not found!"`。check-nacos.sh 已经封装好这一套
+- 端口分配：rag-ai-service 8000 / rag-user-service 8081 / rag-knowledge-service 8082 / rag-document-service 8083 / rag-gateway 8080 / nacos 8848 / mysql 3306 / chromadb 8001（容器内 8000，host 映射 8001） / minio 9000
 
 ---
 
@@ -366,4 +369,53 @@
   - Maven 中央仓库偶尔 handshake 失败（今天跑 build-java.sh 第一次下
     maven-shared-utils 就 "Remote host terminated the handshake"），直接重跑一次
     大概率就好，不要改 settings.xml
+---
+
+## 2026-05-08 - US-012
+- 新增 scripts/ralph/start-all.sh：
+  - set -euo pipefail + REPO_ROOT 从脚本位置推算
+  - docker compose -f docker-compose.dev.yml ps 逐个校验 nacos/db/chromadb/minio
+    必须处于 Up 状态；缺一个直接 exit 1 并提示 `docker compose up -d`
+  - rag-ai-service 用 `uv run python -m uvicorn app.main:app --host 0.0.0.0 --port 8000`
+    后台启动；cd 到 rag-ai-service 目录，uv 会自动按 pyproject.toml 选 venv
+  - 4 个 Java 服务通过 `ls target/<module>-*.jar | grep -v sources|javadoc|.original`
+    取 fat jar，`nohup java -jar ... > .run/<m>.log 2>&1 & echo $! > .run/<m>.pid`
+  - wait_port 双退路：优先 `nc -z 127.0.0.1 <port>`，退化 `bash /dev/tcp`，
+    每服务 90s 超时
+  - 脚本末尾指路：check-nacos.sh / e2e-smoke.sh / tail -f logs / kill pid
+- 新增 scripts/ralph/check-nacos.sh：
+  - 先 POST /nacos/v1/auth/login (username/password 默认 nacos/nacos，可由
+    env 覆盖) 拿 accessToken；Nacos 2.x 默认开鉴权，直连 naming API 会 403
+  - 循环 5 个服务名 GET /nacos/v1/ns/instance/list?serviceName=<>&groupName=
+    DEFAULT_GROUP&namespaceId=&accessToken=...
+  - python3 -c 解析 hosts：空数组→NO_INSTANCE 打红 ✗；有 healthy=True 打绿 ✓
+    并缩进列出每个实例 ip:port/healthy/enabled/weight；全绿 exit 0，否则 exit 1
+  - **坑提示**：python -c 里的代码被 shell 单引号包，就**不要**用 f-string
+    （f-string 内部不能出现 \" 转义），改用 .format()；否则 SyntaxError:
+    "unexpected character after line continuation character"
+- .gitignore 加 `/.run/`：start-all.sh 写的 pid/log 不要进 git
+- 质量检查：
+  - `bash -n scripts/ralph/start-all.sh` 通过
+  - `bash -n scripts/ralph/check-nacos.sh` 通过
+  - `bash scripts/ralph/check-nacos.sh` 在服务未启动时正确返回"0 instances
+    registered"（每个服务）+ exit 1，证明 auth + parse 链路都对
+- 文件变更：
+  - A scripts/ralph/start-all.sh（755）
+  - A scripts/ralph/check-nacos.sh（755）
+  - M scripts/ralph/prd.json
+  - M scripts/ralph/progress.txt
+  - M .gitignore
+- **Learnings for future iterations:**
+  - `python3 -c '...'`：整段用 shell 单引号包起来后，python 里**不能**再用 `\"`
+    去转义双引号（shell 根本不会把 `\"` 解成 `"`，会当成字面量），改用
+    `.format()` / 内部用双引号、字符串字面量里没有内层引号
+  - Nacos naming API 403 的第一反应应当是"没带 accessToken"，不是"namespace
+    写错"；开鉴权后 v1/v2 的 naming API 都要 accessToken
+  - `nc -z` 不是 posix 标准，某些 macOS / alpine 镜像里可能没有 `nc`；脚本里
+    留 `bash /dev/tcp/...` 兜底
+  - bash 里 `$(command <<EOF ... EOF)` 的 EOF 必须严格顶格、且 `)` 要换行；
+    把 `)"` 和命令写在一行会提前截断 command substitution。US-012 第一版
+    `check-nacos.sh` 就栽在这里
+  - 本地用 nohup + pid 文件够用；未来想换成 tmux session / systemd unit 让
+    脚本重入更干净，但目前 pid 文件已经足以 `kill $(cat .run/*.pid)` 收尾
 ---
