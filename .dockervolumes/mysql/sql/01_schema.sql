@@ -54,13 +54,14 @@ CREATE TABLE IF NOT EXISTS `knowledge_bases` (
 
 -- ============================================================================
 -- documents
--- 备注：file_size 目前按 alembic initial 的 Integer；US-008 会把它改成 BIGINT
+-- 备注：file_size 已按 US-008 对齐到 BIGINT NOT NULL（Python BigInteger /
+-- Java java.math.BigInteger），跨 2GiB 文件才不会溢出
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS `documents` (
     `id` INT NOT NULL AUTO_INCREMENT,
     `file_path` VARCHAR(255) NOT NULL,
     `file_name` VARCHAR(255) NOT NULL,
-    `file_size` INT DEFAULT NULL,
+    `file_size` BIGINT NOT NULL,
     `content_type` VARCHAR(100) DEFAULT NULL,
     `file_hash` VARCHAR(64) DEFAULT NULL,
     `knowledge_base_id` INT NOT NULL,
@@ -220,6 +221,6 @@ CREATE TABLE IF NOT EXISTS `alembic_version` (
     PRIMARY KEY (`version_num`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-INSERT IGNORE INTO `alembic_version` (`version_num`) VALUES ('3580c0dcd005');
+INSERT IGNORE INTO `alembic_version` (`version_num`) VALUES ('a1b2c3d4e5f6');
 
 SET FOREIGN_KEY_CHECKS = 1;

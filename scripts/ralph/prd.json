@@ -117,8 +117,8 @@
         "Build/Typecheck passes (cd rag-document-service && ./mvnw -DskipTests package && python -c \"from app.models.knowledge import Document\")"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "documents.file_size: Python ORM 已经是 BigInteger NOT NULL，Java Document.fileSize 也是 BigInteger，只有 MySQL 从 alembic initial 继承的 INT NULL 对不上。补上 alembic migration a1b2c3d4e5f6_align_documents_file_size_bigint（down_revision=3580c0dcd005，upgrade: alter_column INT → BigInteger NOT NULL），同步更新 01_schema.sql 的 DDL 与 alembic_version seed 到新 head；对现有 ragwebui 已手工 ALTER 并 UPDATE alembic_version，check_schema.sql 输出 file_size = bigint NO（NOT NULL）✓。产物：scripts/ralph/check_schema.sql（打印 7 张表 column_name/data_type/is_nullable 等）、scripts/ralph/expected_schema.md（Python vs Java vs MySQL 对照 + 末尾列出已知遗留 deltas 作为后续 backlog）。verified: ./mvnw -DskipTests package 退出 0；`from app.models.knowledge import Document` 打印 BIGINT / nullable=False；mysql < check_schema.sql 结果与 expected_schema.md 各表一致。"
     },
     {
       "id": "US-009",

@@ -12,6 +12,8 @@
 - Feign 客户端路径 = 目标 controller 的 `@RequestMapping` + 方法 `@GetMapping/@PostMapping`；只写方法级路径会被网关当成根路径匹配→直连服务时也对不上。审 Feign 路径务必对照目标 controller 的类级 RequestMapping
 - 职责分工：KB 的 CRUD / upload / preview / process 归 Java（rag-knowledge-service + rag-document-service），Python 侧只做 chat / retrieval / api-keys / openapi。碰到 KB 写操作代码在 Python 里出现 → 基本都是迁移遗留，该删
 - rag-ai-service/app/main.py 的总 prefix 是 settings.API_V1_STR (= /api/ai)，再叠加 api_v1/api.py 里各 router 的 prefix；看 Python 端点的完整路径要两段拼起来算
+- schema 三方对齐的真相来源：Python ORM (`rag-ai-service/app/models/*.py`) / Java @TableField (`rag-*-service/.../entity/*.java`) / MySQL 01_schema.sql + alembic；改列的正确姿势是三处同步，并跑 scripts/ralph/check_schema.sql 与 expected_schema.md 比对
+- 新增 alembic migration 的三件套：(1) 写 .py 文件并 set revision / down_revision；(2) 同步更新 01_schema.sql（DDL + 末尾 alembic_version seed）；(3) 对已存在的 DB 跑 ALTER + UPDATE alembic_version，否则 `alembic upgrade head` 会把刚做过的 DDL 再来一次
 
 ---
 
@@ -138,4 +140,54 @@
     的单点路由
   - Python 端点全路径 = settings.API_V1_STR + api_v1/api.py prefix + 文件内 @router 路径，三段拼起来；别只看 @router.post 的字符串
   - FastAPI `router.routes` 里每个 r.methods 是 `set[str]`，断言里比较记得用 `{'GET'}` 这种 set 字面量
+---
+
+## 2026-05-08 - US-008
+- 7 张业务表做了三方审计（Python ORM / Java @TableField / MySQL）。唯一阻塞
+  性不对齐：documents.file_size → MySQL INT NULL vs Python/Java BigInteger。
+  超过 2GiB 的文件会在 MySQL 溢出或 Java 反序列化被截断
+- 新增 alembic migration rag-ai-service/alembic/versions/a1b2c3d4e5f6_align_
+  documents_file_size_bigint.py（down_revision=3580c0dcd005）：
+  upgrade 把 documents.file_size 从 INT nullable → BigInteger NOT NULL；
+  downgrade 反向
+- 同步改 .dockervolumes/mysql/sql/01_schema.sql：documents.file_size DDL
+  改成 `BIGINT NOT NULL`，末尾 alembic_version seed 从 '3580c0dcd005' 改
+  到 'a1b2c3d4e5f6'
+- 对已经活着的 ragwebui 手工 apply 同一变更：
+  `ALTER TABLE documents MODIFY file_size BIGINT NOT NULL;`
+  `UPDATE alembic_version SET version_num='a1b2c3d4e5f6' WHERE version_num='3580c0dcd005';`
+- 新增 scripts/ralph/check_schema.sql：对 7 张表 SELECT information_schema.
+  columns，按固定顺序输出 column_name/column_type/data_type/is_nullable/
+  column_key/column_default/extra，可直接 `docker exec -i ... mysql ... <
+  check_schema.sql`
+- 新增 scripts/ralph/expected_schema.md：每张表一张 Python/Java/MySQL 对照
+  表，末尾"已知遗留 deltas"集中记录 US-008 scope 外的不一致（如
+  documents.content_type Python nullable=False vs MySQL NULL；
+  document_uploads 几个 String 无长度；Java DocumentChunk 缺时间戳字段等）
+- Python ORM app/models/knowledge.py 无需改动（已经是 BigInteger NOT NULL），
+  Java Document.fileSize 无需改动（已经是 BigInteger）
+- 质量检查：
+  - `uv run python -c "from app.models.knowledge import Document; print(Document.__table__.c.file_size.type)"` 返回 BIGINT
+  - `cd rag-document-service && ./mvnw -DskipTests package` 退出 0
+  - `docker exec -i rag-service-db-1 mysql -uroot -proot ragwebui < scripts/
+    ralph/check_schema.sql` 打印的 7 张表与 expected_schema.md 各表完全一致，
+    重点是 `documents file_size bigint bigint NO`（NOT NULL）
+  - alembic head 只有 'a1b2c3d4e5f6'（无分叉）
+- 文件变更：
+  - A rag-ai-service/alembic/versions/a1b2c3d4e5f6_align_documents_file_size_bigint.py
+  - M .dockervolumes/mysql/sql/01_schema.sql（documents.file_size + alembic_version seed）
+  - A scripts/ralph/check_schema.sql
+  - A scripts/ralph/expected_schema.md
+- **Learnings for future iterations:**
+  - 加新 alembic migration 要三件套同步：migration .py + 01_schema.sql DDL
+    + 01_schema.sql 末尾 alembic_version seed。漏任何一条后续重建 DB 或
+    `alembic upgrade head` 会产生不一致
+  - 对已经有数据的 DB，不能等 alembic 跑 migration（自动化链路还没搭），
+    要手工 ALTER + 手工 UPDATE alembic_version；ALTER 顺序：先把列数据清干净
+    再改类型（此处 DB 是空的所以没踩坑）
+  - 把"已知遗留 deltas"集中写在 expected_schema.md 末尾，而不是分散在
+    migration 里，这样做下一次 schema 审计时一眼能看到"哪些差异是已知且暂
+    不修"，避免每次都从头重查
+  - `alembic.script.ScriptDirectory.get_heads()` 返回 list 不是 tuple，断言
+    里要写 `assert heads == ['xxx']`（之前写成 tuple 断言挂了但实际 graph 是对的）
 ---
