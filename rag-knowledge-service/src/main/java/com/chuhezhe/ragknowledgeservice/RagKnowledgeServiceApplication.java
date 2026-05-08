@@ -15,7 +15,7 @@ import org.springframework.core.env.Environment;
 @ComponentScan("com.chuhezhe")
 @EnableDiscoveryClient
 @MapperScan("com.chuhezhe.ragknowledgeservice.mapper")
-@EnableFeignClients(basePackages = "com.chuhezhe.ragknowledgeservice.feign", defaultConfiguration = FeignConfiguration.class)
+@EnableFeignClients(basePackages = {"com.chuhezhe.ragknowledgeservice.feign", "com.chuhezhe.ragcommonservice.feign"}, defaultConfiguration = FeignConfiguration.class)
 public class RagKnowledgeServiceApplication {
 
 	public static void main(String[] args) {

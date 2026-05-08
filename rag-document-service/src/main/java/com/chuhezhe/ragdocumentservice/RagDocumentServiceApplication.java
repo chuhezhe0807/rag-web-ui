@@ -15,7 +15,7 @@ import org.springframework.core.env.Environment;
 @ComponentScan("com.chuhezhe")
 @EnableDiscoveryClient
 @MapperScan("com.chuhezhe.ragdocumentservice.mapper")
-@EnableFeignClients(basePackages = "com.chuhezhe.ragdocumentservice.feign", defaultConfiguration = FeignConfiguration.class)
+@EnableFeignClients(basePackages = {"com.chuhezhe.ragdocumentservice.feign", "com.chuhezhe.ragcommonservice.feign"}, defaultConfiguration = FeignConfiguration.class)
 public class RagDocumentServiceApplication {
 
     public static void main(String[] args) {
