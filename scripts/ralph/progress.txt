@@ -85,3 +85,24 @@
   - 后续审其他 Feign client（如 DocumentServiceClient）时同样要按这条规则逐一对照，US-006 就是类似的路径对齐问题
   - POST /api/ai/documents/process 之前返回 404 的根因就是这里；端到端活体验证留给 US-013 的 e2e-smoke.sh
 ---
+
+## 2026-05-08 - US-006
+- 选 Option B（让 KB 侧停用 addUploadDocumentRecord，复用 /upload 已有的 uploadDocRecordId 返回）而非 Option A（在 document-service 新开 /upload/record 端点）：
+  - Option A 会让 rag-document-service 的 /upload 和 /upload/record 都创建 document_uploads 记录，一次上传产出两条记录；Option B 是单一数据源，最小改动
+  - DocumentController#uploadDocument 已经调 documentUploadService.addUploadRecord 并回写 UploadDocResult.uploadDocRecordId，Option B 只是消费这个已经存在的返回值
+- 代码改动：
+  - rag-knowledge-service KnowledgeBaseService#uploadKnowledgeBaseDocuments：捕获 uploadDocument 的 Result，读 `uploadRes.getData().getUploadDocRecordId()`；删除 addUploadDocumentRecord 调用和 BigInteger/UploadDocRecordDTO import
+  - rag-knowledge-service DocumentServiceClient：删除 addUploadDocumentRecord 方法 + UploadDocRecordDTO import，注释里写明历史上的 /upload/record 为何被删
+  - rag-knowledge-service/pom.xml：与 US-003 对 rag-document-service 做的修复一致，补 spring-boot-starter-test(test scope)，否则 `./mvnw -DskipTests package` 会在 testCompile 阶段挂
+- 质量检查：
+  - `cd rag-document-service && ./mvnw -DskipTests package` 退出 0
+  - `cd rag-knowledge-service && ./mvnw -DskipTests package` 退出 0
+- 文件变更：
+  - M rag-knowledge-service/src/main/java/com/chuhezhe/ragknowledgeservice/service/KnowledgeBaseService.java
+  - M rag-knowledge-service/src/main/java/com/chuhezhe/ragknowledgeservice/feign/DocumentServiceClient.java
+  - M rag-knowledge-service/pom.xml
+- **Learnings for future iterations:**
+  - 审 Feign 客户端与 target endpoint 不对齐时，先看 target 是否已经"顺带"做了另一次调用想要的事（这里 /upload 已经返回 upload record id）。优先消费现成返回值而不是新增端点，避免数据双写
+  - rag-knowledge-service KnowledgeBaseService 原 uploadKnowledgeBaseDocuments 里还有另一个 pre-existing bug：`new File("temp/" + multipartFile.getOriginalFilename())` 从未写入过内容，`file.length()` 永远返回 0，`FileUtil.calculateFileSHA256(file)` 也算的是空文件的 hash。不在 US-006 的 scope，但做后续 upload 流程调试时要记得
+  - 业务模块 pom 缺 spring-boot-starter-test 是跨模块的常见坑：rag-document-service（US-003 修）、rag-knowledge-service（US-006 修）；下次遇到 rag-user-service / rag-gateway 跑 package 挂 testCompile 时直接按同样方式补即可
+---

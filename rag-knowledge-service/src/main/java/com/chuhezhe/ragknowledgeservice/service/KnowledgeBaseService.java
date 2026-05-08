@@ -7,9 +7,9 @@ import com.chuhezhe.common.constants.ErrorConstants;
 import com.chuhezhe.common.entity.Result;
 import com.chuhezhe.common.util.FileUtil;
 import com.chuhezhe.ragcommonservice.dto.QueryDocDTO;
-import com.chuhezhe.ragcommonservice.dto.UploadDocRecordDTO;
 import com.chuhezhe.ragcommonservice.dto.UploadDocDTO;
 import com.chuhezhe.ragcommonservice.vo.DocumentVO;
+import com.chuhezhe.ragcommonservice.vo.UploadDocResult;
 import com.chuhezhe.ragcommonservice.vo.KnowledgeBaseVO;
 import com.chuhezhe.ragcommonservice.vo.UserVO;
 import com.chuhezhe.ragknowledgeservice.dto.KnowledgeBaseDTO;
@@ -23,7 +23,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
-import java.math.BigInteger;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
@@ -162,27 +161,21 @@ public class KnowledgeBaseService extends ServiceImpl<KnowledgeBaseMapper, Knowl
                  continue;
              }
 
-             // 3. 上传文档到minio
+             // 3. 上传文档到 minio
+             // rag-document-service 的 /api/ai/documents/upload 在落 MinIO 的同时已经会创建 document_uploads 记录，
+             // 并在 UploadDocResult.uploadDocRecordId 里把主键返回过来，不需要再发一次 /upload/record
              String tempPath = String.format("kb_%d/temp/%s", kbId, multipartFile.getOriginalFilename());
-             documentServiceClient.uploadDocument(
+             Result<UploadDocResult> uploadRes = documentServiceClient.uploadDocument(
                      new UploadDocDTO(kbId, null, tempPath, multipartFile)
              );
 
-             // 4. 创建上传记录
-             Result<Integer> uploadIdRes = documentServiceClient.addUploadDocumentRecord(
-                    UploadDocRecordDTO.builder()
-                            .knowledgeBaseId(kbId)
-                            .fileHash(fileHash)
-                            .fileName(file.getName())
-                            .fileSize(BigInteger.valueOf(file.length())) // file.length() 以字节为单位
-                            .contentType(multipartFile.getContentType())
-                            .tempPath(tempPath)
-                            .build()
-            );
+             Integer uploadId = uploadRes != null && uploadRes.getData() != null
+                     ? uploadRes.getData().getUploadDocRecordId()
+                     : null;
 
-            results.add(
+             results.add(
                  UploadKBDocVO.builder()
-                        .uploadId(uploadIdRes.getData())
+                        .uploadId(uploadId)
                         .fileName(file.getName())
                         .tempPath(tempPath)
                         .status(UploadKBDocVO.Status.PENDING)

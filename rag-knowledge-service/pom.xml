@@ -23,6 +23,14 @@
 			<artifactId>lombok</artifactId>
 			<scope>provided</scope>
 		</dependency>
+
+		<!-- test: 与 rag-document-service 对齐；没有它 src/test 骨架类 testCompile 必挂，
+		     PRD 用的 `./mvnw -DskipTests package` 也过不去（skipTests 只跳过执行不跳过编译） -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
     </dependencies>
 
 	<build>

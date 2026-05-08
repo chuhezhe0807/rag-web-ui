@@ -86,8 +86,8 @@
         "Build/Typecheck passes (cd rag-document-service && ./mvnw -DskipTests package && cd ../rag-knowledge-service && ./mvnw -DskipTests package)"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "选 Option B：/api/ai/documents/upload 已经在落 MinIO 的同一流程里调 documentUploadService.addUploadRecord 并把主键回写到 UploadDocResult.uploadDocRecordId；Option A 再开一个端点会产生重复 document_uploads 记录。改动：KnowledgeBaseService.uploadKnowledgeBaseDocuments 读 uploadRes.getData().getUploadDocRecordId()；删 DocumentServiceClient.addUploadDocumentRecord + 相关 UploadDocRecordDTO/BigInteger import；顺手把 rag-knowledge-service/pom.xml 也补上 spring-boot-starter-test（与 US-003 对 rag-document-service 做的修复一致）。verified: 两边 ./mvnw -DskipTests package 均退出 0；document_uploads 新增行的活体校验留给 US-013。"
     },
     {
       "id": "US-007",
