@@ -191,8 +191,8 @@
         "Build/Typecheck passes (bash -n scripts/ralph/e2e-smoke.sh)"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "fixtures/sample.md：引入几个在整个代码库里唯一的专有名词（Zephyr-7 / Calipso-Mirror-Omega / Dr. Nadia Okonkwo / Tenerife Meson Laboratory / muon-clustered plasma），chat 答案里出现任一即可判定 retrieval 打通。scripts/ralph/e2e-smoke.sh：7 步串行，关键细节（对照后端实际形状）：register 是 application/json + {username,password,email}，密码要过 `^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d).{8,}$` 正则，脚本里用 `Ralph2026_${SUFFIX}`；login 是 `/api/ai/auth/token` + form-urlencoded（**不是** JSON），token 从 Result<UserLoginVO>.data.accessToken 读；KB 创建 POST /knowledge-base 返 Result<KnowledgeBaseVO>.data.id；upload 是 PUT multipart `file=@...;type=text/markdown`，返 data[0].uploadId；process 入参 `{knowledgeId, processDocItemDTOList:[{documentUploadId, skipProcess:false}]}`，返 data.tasks[0].taskId；poll 每 3s 一次 120s 上限，状态实际是小写 pending/processing/completed/failed；chat 两步：先 POST /api/ai/chat {title, knowledge_base_ids:[kb_id]} 拿 id，再 POST /api/ai/chat/{id}/messages {messages:[{role:user,content:...}]}，整个流式响应 grep EXPECTED_KEYWORDS_REGEX 任一命中即成功。辅助 json_get 用 python3 + env 传 body，走 dotted path（支持数字索引）。verified: bash -n scripts/ralph/e2e-smoke.sh 通过；完整 7 步活体跑需要人先 docker compose up -d → build-java.sh → start-all.sh → check-nacos.sh 全绿，以及 rag-ai-service/.env 配了可用的 OPENAI_API_KEY（chat 步依赖）；脚本本身不假设 stack 在跑，任一步非预期立即 exit 1 并打印 full body 便于定位。"
     },
     {
       "id": "US-014",

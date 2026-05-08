@@ -24,6 +24,10 @@
 - 本地起栈三板斧：`docker compose -f docker-compose.dev.yml up -d` → `bash scripts/ralph/build-java.sh` → `bash scripts/ralph/start-all.sh`；pid/log 落在 `.run/`（gitignored），收尾用 `kill $(cat .run/*.pid)`
 - Nacos 2.x 开启了鉴权，naming open API（`/nacos/v1/ns/instance/list`）必须先 POST `/nacos/v1/auth/login` 拿 accessToken 再附在 query 里；否则返回 403 `"user not found!"`。check-nacos.sh 已经封装好这一套
 - 端口分配：rag-ai-service 8000 / rag-user-service 8081 / rag-knowledge-service 8082 / rag-document-service 8083 / rag-gateway 8080 / nacos 8848 / mysql 3306 / chromadb 8001（容器内 8000，host 映射 8001） / minio 9000
+- register/login payload 形状不一致：register 是 JSON body {username,password,email}，**login（/api/ai/auth/token）是 form-urlencoded**（UserController 上 `consumes = APPLICATION_FORM_URLENCODED_VALUE`）；密码必须匹配 `^(?=.*[A-Z])(?=.*[a-z])(?=.*\d).{8,}$` 正则
+- document process 任务状态枚举值是**小写** pending/processing/completed/failed（ProcessingTask.STATUS_* 常量就是小写），虽然 PRD 常写 COMPLETED，脚本里要 `tr [:upper:] [:lower:]` 归一
+- KB 上传接口是 `PUT /knowledge-base/{kb_id}/documents/upload` 而不是 POST；multipart 字段名 `file`（controller 的 `@RequestParam("file") List<MultipartFile>`）
+- Fixtures 给 e2e 测试用的专有名词要保证全仓唯一，否则 chat 返回里随便命中一个通用词也被判通过；当前用 Zephyr-7 / Calipso-Mirror-Omega / Nadia Okonkwo / Tenerife Meson / muon-clustered 等编造词
 
 ---
 
@@ -418,4 +422,58 @@
     `check-nacos.sh` 就栽在这里
   - 本地用 nohup + pid 文件够用；未来想换成 tmux session / systemd unit 让
     脚本重入更干净，但目前 pid 文件已经足以 `kill $(cat .run/*.pid)` 收尾
+---
+
+## 2026-05-08 - US-013
+- 新增 fixtures/sample.md：几段全仓唯一的专有名词（Zephyr-7 / Calipso-Mirror-
+  Omega / Dr. Nadia Okonkwo / Tenerife Meson Laboratory / muon-clustered
+  plasma 等），chat 回答里命中任一就判 retrieval 全链路打通
+- 新增 scripts/ralph/e2e-smoke.sh（755）：
+  - set -euo pipefail，随机 SUFFIX=$(date +%s)$$，用户名/邮箱带 SUFFIX
+    以免并发跑撞 unique 约束；密码 `Ralph2026_${SUFFIX}` 满足后端正则
+  - json_get helper：python3 + env 传 body，走 `data.tasks.0.taskId` 风格
+    的 dotted path（数字段转 int 当成 list 索引），规避 shell quoting 地狱
+  - 1) register: application/json；2) login: form-urlencoded
+    （UserController.login 标了 consumes = APPLICATION_FORM_URLENCODED_VALUE，
+    传 JSON 会 415）；token 从 `data.accessToken` 读
+  - 3) KB: POST /knowledge-base {name,description}；`description` 有
+    @NotBlank，不能只传 name；返 data.id
+  - 4) upload: PUT multipart `file=@fixtures/sample.md;type=text/markdown`，
+    返 data[0].uploadId
+  - 5) process: POST /api/ai/documents/process {knowledgeId,
+    processDocItemDTOList:[{documentUploadId, skipProcess:false}]}，
+    返 data.tasks[0].taskId
+  - 6) poll: 每 3s GET /api/ai/documents/process/{taskId}，状态归一到小写，
+    命中 completed 跳出，failed 即刻 exit 1；120s 超时
+  - 7) chat: 先 POST /api/ai/chat {title, knowledge_base_ids:[kb_id]} 拿 id，
+    再 POST /api/ai/chat/{id}/messages {messages:[{role:user,content:...}]}；
+    整个 SSE 流作为字符串 grep -E EXPECTED_KEYWORDS_REGEX
+  - 任一步失败打印 full body 到 stderr 再 exit 1，避免 PRD 要求的 "exits 0
+    only when all 7 steps return success" 被静默欺骗
+- 质量检查：
+  - `bash -n scripts/ralph/e2e-smoke.sh` 通过
+  - json_get 独立跑 `data.tasks.0.taskId` 返回 7（预期）
+  - 完整跑需要人先 docker compose + build-java + start-all + check-nacos 全绿，
+    以及 rag-ai-service/.env 配好可用 OPENAI_API_KEY（chat 步依赖）
+- 文件变更：
+  - A fixtures/sample.md
+  - A scripts/ralph/e2e-smoke.sh（755）
+  - M scripts/ralph/prd.json
+  - M scripts/ralph/progress.txt
+- **Learnings for future iterations:**
+  - Python 脚本替代 jq 做 JSON 抽取时，bash 单引号包整段 python，通过 env
+    传 body，这样无论 body 里有什么引号/换行都不会污染 shell 解析；这个
+    pattern 已经在 US-012 check-nacos / US-013 e2e-smoke 复用了两次
+  - bash 的 `${$((...))}` 是错的——`$((...))` 本身就是命令替换返回值，不
+    需要再套 `${...}`；US-013 第一版写了这个 typo，bash -n 能过但运行时
+    会解析成空。正确写法是 `$(( $(date +%s) - poll_start ))`
+  - 后端用的是 `/api/ai/auth/token`（form）+ `/api/ai/auth/register`（json）
+    + `/api/ai/auth/info`（GET，header Authorization）；调这三条时要特别
+    注意 Content-Type，混用会直接 415/400
+  - ProcessDocDTO 里字段叫 `knowledgeId`（不是 kb_id 或 knowledgeBaseId），
+    `processDocItemDTOList` 下每项叫 `documentUploadId` + `skipProcess`；
+    命名不统一但这是实际 controller 形状，不要"就手改成 kbId 再跑"，会 400
+  - chat 第二步返的是 SSE 流（text/event-stream + x-vercel-ai-data-stream: v1），
+    curl 默认会把整个流 buffer 成字符串——对 grep 来说无所谓，但如果以后要
+    检查 token-by-token 或超时提前退出，要改成 `--no-buffer` + 行式解析
 ---
