@@ -55,6 +55,15 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
+
+        <!-- 复用 common 里的 GConstants / Result / ErrorConstants，JwtAuthGlobalFilter
+             要用它们写回 401 Result body；单独依赖 rag-common 即可，rag-common-service
+             有 spring-mvc 依赖，会把 gateway 反应式栈搞冲突，不要引 -->
+        <dependency>
+            <groupId>com.chuhezhe</groupId>
+            <artifactId>rag-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>

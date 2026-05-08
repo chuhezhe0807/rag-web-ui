@@ -14,6 +14,9 @@
 - rag-ai-service/app/main.py 的总 prefix 是 settings.API_V1_STR (= /api/ai)，再叠加 api_v1/api.py 里各 router 的 prefix；看 Python 端点的完整路径要两段拼起来算
 - schema 三方对齐的真相来源：Python ORM (`rag-ai-service/app/models/*.py`) / Java @TableField (`rag-*-service/.../entity/*.java`) / MySQL 01_schema.sql + alembic；改列的正确姿势是三处同步，并跑 scripts/ralph/check_schema.sql 与 expected_schema.md 比对
 - 新增 alembic migration 的三件套：(1) 写 .py 文件并 set revision / down_revision；(2) 同步更新 01_schema.sql（DDL + 末尾 alembic_version seed）；(3) 对已存在的 DB 跑 ALTER + UPDATE alembic_version，否则 `alembic upgrade head` 会把刚做过的 DDL 再来一次
+- JWT 路径分工：网关只做"存在性校验 + 原样透传"（JwtAuthGlobalFilter，order=-100，白名单 /api/ai/auth/**），业务服务 AuthInterceptor 才做"解析 + 查用户"。别在网关里做完整校验——网关不该依赖 UserServiceClient，两处做会产生两个真相源
+- rag-gateway 是 reactive(WebFlux)，**不要**引 rag-common-service（Spring MVC）会 auto-config 冲突；只引 rag-common 拿 Result / GConstants / ErrorConstants 即可
+- 服务间 Feign 透传 header 用 `com.chuhezhe.ragcommonservice.config.FeignConfiguration#authHeaderRelayRequestInterceptor`，从 `RequestContextHolder` 取 ServletRequestAttributes，null 时（非 web 线程）静默跳过
 
 ---
 
@@ -190,4 +193,56 @@
     不修"，避免每次都从头重查
   - `alembic.script.ScriptDirectory.get_heads()` 返回 list 不是 tuple，断言
     里要写 `assert heads == ['xxx']`（之前写成 tuple 断言挂了但实际 graph 是对的）
+---
+
+## 2026-05-08 - US-009
+- rag-common-service WebMvcConfig：addInterceptors 补
+  `.excludePathPatterns("/api/ai/auth/**")`。AuthInterceptor 本来就靠
+  @AnonymousAccess 放行 register/login，path 白名单是双保险，防止未来漏加
+  注解
+- rag-common-service FeignConfiguration：原先只配了 feignLoggerLevel，
+  现在新增 `authHeaderRelayRequestInterceptor` @Bean：
+  - 从 `RequestContextHolder.getRequestAttributes()` 取 ServletRequestAttributes
+  - 读入站 `Authorization`（GConstants.JWT_TOKEN_HEADER）和 `X-Token` 两
+    个 header，有就按同名透传到出站 FeignTemplate
+  - attributes 为 null（非 web 线程：定时任务 / MQ 消费）时静默跳过
+- rag-gateway 新增 filter/JwtAuthGlobalFilter.java：
+  - implements `GlobalFilter, Ordered`，order = -100
+  - 白名单列表 `/api/ai/auth/**`（AntPathMatcher 匹配），命中直接放行
+  - 其他路径必须带 `Authorization` 或 `X-Token` 非空 header；不解析 token，
+    只做存在性校验。缺失则 `response.setStatusCode(401) +
+    writeWith(Result.error(UNAUTHORIZED) JSON)`
+  - 网关不依赖 UserServiceClient，不在这里查用户，避免和下游 AuthInterceptor
+    重复成两个真相源
+- rag-gateway/pom.xml 加 `com.chuhezhe:rag-common:1.0.0` 依赖（只为拿 Result
+  / GConstants / ErrorConstants）。**不要**引 rag-common-service（Spring MVC），
+  会跟 gateway 的 WebFlux 起 auto-config 冲突
+- 没有改 rag-user-service 的 UserController.register/login 注解（它们本来
+  就有 @AnonymousAccess）
+- 质量检查：
+  - `cd rag-common && ./mvnw -q -DskipTests install` 退出 0
+  - `cd rag-common-service && ./mvnw -DskipTests install` 退出 0
+  - `cd rag-gateway && ./mvnw -DskipTests package` 退出 0
+- 文件变更：
+  - M rag-common-service/src/main/java/.../config/WebMvcConfig.java
+  - M rag-common-service/src/main/java/.../config/FeignConfiguration.java
+  - A rag-gateway/src/main/java/.../filter/JwtAuthGlobalFilter.java
+  - M rag-gateway/pom.xml
+- **Learnings for future iterations:**
+  - Gateway 是 reactive(WebFlux)、业务服务是 servlet(Spring MVC)，两边别
+    互相引对方的 starter：gateway 引 rag-common-service 会触发 Spring
+    Boot 对 DispatcherServlet 的 auto-config，跟 WebFlux 起冲突
+  - Feign RequestInterceptor 里取 ServletRequestAttributes 一定要判 null，
+    否则定时任务 / MQ 触发的 Feign 会 NPE
+  - 在 WebFlux GlobalFilter 里写 response body：用 `response.setStatusCode()`
+    + `response.bufferFactory().wrap(bytes)` + `response.writeWith(Mono.just(buffer))`。
+    直接往 `response.getWriter` 写是 servlet API，会抛
+  - `@ComponentScan("com.chuhezhe")` 已在 RagGatewayApplication 上，filter 包
+    自动被扫到，不需要再手动 register
+  - GlobalFilter 的 order 越小越早执行；放 -100 确保在路由匹配前判断 JWT，
+    但要晚于 Spring Cloud Gateway 自身的几个前置 Filter（它们一般 order <
+    -100000）
+  - 完整 Feign 透传 + 网关拦截的活体校验要等 US-012 start-all.sh 把完整
+    stack 起来后、US-013 e2e-smoke.sh 跑过再算数；当前 US-009 只保证编译
+    和逻辑自洽
 ---

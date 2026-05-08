@@ -132,8 +132,8 @@
         "Build/Typecheck passes (cd rag-common-service && ./mvnw -DskipTests package && cd ../rag-gateway && ./mvnw -DskipTests package)"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "WebMvcConfig 补 excludePathPatterns(\"/api/ai/auth/**\")；AuthInterceptor 本身已经识别 @AnonymousAccess，path 白名单是 belt-and-suspenders。FeignConfiguration 新增 authHeaderRelayRequestInterceptor bean，从 ServletRequestAttributes 里捞 Authorization 和 X-Token，都按原名透传；非 web 线程（定时任务/MQ）时什么也不做。rag-gateway 新建 JwtAuthGlobalFilter（order=-100），对白名单 /api/ai/auth/** 放行，其他请求必须有 Authorization 或 X-Token 非空 header 才放行，缺失直接写回 401 + Result.error(UNAUTHORIZED) JSON body；不解析 token，最终判定仍在 user-service AuthInterceptor。rag-gateway/pom 加 rag-common 依赖（不要引 rag-common-service，会拖进 servlet-web 栈冲突 reactive）。verified: rag-common → rag-common-service → rag-gateway 三步 ./mvnw -DskipTests package 都退出 0；活体 401/200 校验留给 US-013 smoke。"
     },
     {
       "id": "US-010",
